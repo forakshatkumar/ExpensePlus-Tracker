@@ -9,7 +9,9 @@ A responsive expense manager with **React 19 + Vite + Tailwind CSS 4** and an **
 | ExpensePlus API | `server` | Express (auto-detect) | `https://expenseplus-api.vercel.app` |
 | ExpensePlus website | `client` | Vite | `https://expense-plus-pi.vercel.app` |
 
-> **Never deploy the repo root as the frontend.** The React app is under `client/`, not `/` or `server/`. The frontend's `client/vercel.json` provides refresh-safe React Router rewrites.
+> **Never deploy the repo root as the frontend.** The React app is under `client/`. The frontend uses `client/vercel.json` for both React Router refreshes **and same-origin API proxying** to the deployed ExpensePlus API, so `VITE_API_URL` is not required on Vercel. See `VERCEL-QUICK-START.md`.
+
+**Important:** This ZIP is based on the current user-uploaded source, with the Vercel API proxy fix applied. Read [`VERCEL-QUICK-START.md`](VERCEL-QUICK-START.md) first for the shortest deployment path.
 
 ## 1. Push to GitHub
 
@@ -54,19 +56,13 @@ The backend root `/` returns a JSON explanation on purpose. The HTML web app liv
 1. Vercel → **Add New → Project** → Import the **same repo** again.
 2. Name the project e.g. `expense-plus-pi`.
 3. Set **Root Directory: `client`**, Framework: **Vite**, Build Command: `npm run build`, Output Directory: `dist`.
-4. In **frontend-project** Environment Variables (Production) add:
-
-```env
-VITE_API_URL=https://YOUR-BACKEND.vercel.app
-```
-
-Replace with the exact API deployment domain (no trailing slash, no `/api` suffix). The frontend already includes your supplied **public Firebase web config** as defaults in `client/src/lib/firebase.js`. To override it or use a different Firebase project, set the `VITE_FIREBASE_*` variables shown in `client/.env.example` as Vercel frontend env vars.
+4. **No production `VITE_API_URL` variable is needed.** In production the frontend makes relative `/api/...` requests and `client/vercel.json` proxies them to `https://expenseplus-api.vercel.app`. If the real backend address changes, update the proxy destination in `client/vercel.json`. Existing `VITE_API_URL` variables in Vercel are ignored by this version of the production frontend. The public Firebase web config for `spendly-ba3b0` remains in `client/src/lib/firebase.js` as defaults; optional `VITE_FIREBASE_*` values override it.
 
 5. Click Deploy. Verify the live domain serves a styled login page (or dashboard if signed in).
 6. Go back to **the backend Vercel project**, ensure `CLIENT_ORIGIN` matches the *actual* frontend URL, then redeploy backend if changed.
 7. In **Firebase Console → Authentication → Settings → Authorized domains**, add your public frontend host (e.g. `expense-plus-pi.vercel.app`, *without* `https://`). Google Sign-In must be enabled in **Sign-in method**.
 
-After editing any environment variable, use **Redeploy**; Vite bakes its public configuration into the build.
+After editing any build-time environment variable, use **Redeploy**. Updating the API proxy also requires a new frontend deployment.
 
 ## 4. Local development
 
@@ -98,9 +94,9 @@ npm run dev
 | **Cannot GET /** or JSON API response on site URL | You deployed `server` instead of `client`, or visited the API project URL. Deploy the frontend with **Root Directory `client`**. |
 | **404 on refreshing `/dashboard`** | Commit `client/vercel.json` (already included); deploy with Root Directory `client`. |
 | **Blank screen** | Open browser DevTools → Console. The app now renders an explicit startup-error panel if its JS bootstrap fails. Check failed asset requests, build logs and environment variables. |
-| **Backend URL missing** | Set `VITE_API_URL=https://YOUR-BACKEND.vercel.app` in frontend Vercel environment variables and **redeploy**. |
+| **Backend URL missing** | This version avoids the missing-variable error; redeploy updated frontend code and verify `https://YOUR-FRONTEND.vercel.app/api/health` returns JSON. |
 | **Google auth/unauthorized-domain** | Add your exact frontend hostname under Firebase Authentication → Authorized domains. |
-| **CORS error / Failed to fetch** | On the backend set `CLIENT_ORIGIN` to the exact `https://...vercel.app` frontend origin, then redeploy. |
+| **CORS error / Failed to fetch** | The new production same-origin proxy avoids browser CORS. Verify that `client/vercel.json` is deployed and API health works through the frontend domain. If using direct API requests elsewhere, set backend `CLIENT_ORIGIN` correctly. |
 | **500 Internal server error** | Check backend Function logs and Admin service-account secret JSON. The `/api/health` route checks availability but not Firestore credentials. |
 | **Local works, Vercel doesn't** | Make sure variables are set on the correct Vercel project and environment; Vercel cannot access a `C:\...` Windows JSON path. |
 
