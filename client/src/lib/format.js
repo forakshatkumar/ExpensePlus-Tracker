@@ -7,3 +7,11 @@ export const dateToday = () => {
 };
 export const categoryLabels = {food:"Food",transport:"Transport",utilities:"Utilities",entertainment:"Entertainment",other:"Other"};
 export const categoryEmoji = {food:"🍕",transport:"🚕",utilities:"💡",entertainment:"🎮",other:"✨"};
+
+// Resolve Firestore category IDs to readable labels using categories from GET /api/categories.
+// Do not show raw document IDs if a category was removed or couldn't be loaded.
+export const getCategoryName = (id, categories = []) =>
+  categories.find(category => category.id === id)?.name || categoryLabels[id] || 'Custom category';
+
+export const getCategoryEmoji = (id, categories = []) =>
+  categories.find(category => category.id === id)?.emoji || categoryEmoji[id] || '✨';

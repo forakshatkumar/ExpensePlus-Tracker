@@ -8,7 +8,7 @@ import {dateToday,inr} from '../lib/format';
 ChartJS.register(CategoryScale,LinearScale,PointElement,LineElement,Filler,Tooltip);
 const tiers=[5,10,15,20,30];
 export default function Dashboard(){
-  const {profile,transactions,streak,openExpense}=useAppData();
+  const {profile,transactions,streak,categories,openExpense}=useAppData();
   const month=dateToday().slice(0,7);
   const monthly=transactions.filter(t=>t.date?.startsWith(month)).reduce((s,t)=>s+t.amountCents,0)/100;
   const lifetime=transactions.reduce((s,t)=>s+t.amountCents,0)/100;
@@ -30,7 +30,7 @@ export default function Dashboard(){
       <section className="panel md:col-span-3"><div className="flex items-center justify-between"><p className="stat-label">Lifetime spending</p><TrendingUp className="text-terracotta" size={21}/></div><p className="stat-number">{inr(lifetime)}</p><p className="mt-3 text-xs text-muted">Across your recorded expenses</p></section>
       <section className="panel md:col-span-3"><div className="flex items-center justify-between"><p className="stat-label">Transactions recorded</p><Wallet className="text-mustard" size={21}/></div><p className="stat-number">{transactions.length}</p><p className="mt-3 text-xs text-muted">Little entries, better awareness</p></section>
       <section className="panel min-w-0 md:col-span-3"><div className="flex items-center justify-between gap-3"><div><h2 className="font-display text-2xl">7-day spending</h2><p className="mt-1 text-xs text-muted">Your recent spending rhythm</p></div><CalendarDays size={19} className="text-sage"/></div><div className="ep-chart mt-5"><Line data={chart} options={{maintainAspectRatio:false,responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>inr(c.parsed.y)}}},scales:{x:{grid:{display:false},ticks:{color:'#A59B8D'}},y:{beginAtZero:true,grid:{color:'#403B3540'},ticks:{color:'#A59B8D',callback:v=>`₹${v}`}}}}}/></div></section>
-      <section className="panel min-w-0 md:col-span-3"><div className="mb-2 flex items-center justify-between gap-3"><div><h2 className="font-display text-2xl">Recent activity</h2><p className="mt-1 text-xs text-muted">Your latest four transactions</p></div><Link className="inline-flex items-center gap-1 shrink-0 text-sm text-sage hover:underline" to="/history">View all <ArrowUpRight size={15}/></Link></div>{recent.length?recent.map(item=><TransactionRow key={item.id} item={item}/>):<div className="grid min-h-48 place-items-center text-center"><div><p className="mb-3 text-3xl">🌱</p><p className="text-sm text-muted">Your first expense will appear here.</p><button onClick={()=>openExpense()} className="mt-3 text-sm font-semibold text-sage">Add an expense ↗</button></div></div>}</section>
+      <section className="panel min-w-0 md:col-span-3"><div className="mb-2 flex items-center justify-between gap-3"><div><h2 className="font-display text-2xl">Recent activity</h2><p className="mt-1 text-xs text-muted">Your latest four transactions</p></div><Link className="inline-flex items-center gap-1 shrink-0 text-sm text-sage hover:underline" to="/history">View all <ArrowUpRight size={15}/></Link></div>{recent.length?recent.map(item=><TransactionRow key={item.id} item={item} categories={categories}/>):<div className="grid min-h-48 place-items-center text-center"><div><p className="mb-3 text-3xl">🌱</p><p className="text-sm text-muted">Your first expense will appear here.</p><button onClick={()=>openExpense()} className="mt-3 text-sm font-semibold text-sage">Add an expense ↗</button></div></div>}</section>
     </div>
   </div>;
 }

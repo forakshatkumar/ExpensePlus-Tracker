@@ -1,16 +1,14 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {X,WalletCards,CalendarDays,Tag} from 'lucide-react';
 import {api} from '../../lib/api';
-import {dateToday,categoryLabels,categoryEmoji} from '../../lib/format';
-const defaults=Object.entries(categoryLabels).map(([id,name])=>({id,name,emoji:categoryEmoji[id]}));
-export default function ExpenseModal({onClose,onSaved,notify,edit=null}){
+import {dateToday,getCategoryName} from '../../lib/format';
+export default function ExpenseModal({onClose,onSaved,notify,edit=null,categories=[],onCategoriesChanged}){
   const [amount,setAmount]=useState(edit?String((edit.amountCents/100).toFixed(2)):'');
   const [description,setDescription]=useState(edit?.description||'');
   const [categoryId,setCategory]=useState(edit?.categoryId||'food');
   const [date,setDate]=useState(edit?.date||dateToday());
   const [note,setNote]=useState(edit?.note||'');
   const [isSubscription,setSubscription]=useState(Boolean(edit?.isSubscription));
-  const [categories,setCategories]=useState(defaults);
   const [newCategory,setNewCategory]=useState('');
   const [newEmoji,setNewEmoji]=useState('✨');
   const [addingCategory,setAddingCategory]=useState(false);
@@ -41,13 +39,12 @@ export default function ExpenseModal({onClose,onSaved,notify,edit=null}){
     document.addEventListener('keydown',key);
     return ()=>{document.body.style.overflow=prev;document.removeEventListener('keydown',key);};
   },[]);
-  useEffect(()=>{api('/api/categories').then(r=>setCategories(r.categories?.length?r.categories:defaults)).catch(()=>{});},[]);
   async function addCategory(){
     if(!newCategory.trim()||newCategory.trim().length>24){setError('Category name must be 1–24 characters.');return;}
     setAddingCategory(true);setError('');
     try{
       const r=await api('/api/categories',{method:'POST',body:JSON.stringify({name:newCategory.trim(),emoji:newEmoji.trim()||'✨'})});
-      setCategories(previous=>[...previous,r.category]);setCategory(r.category.id);setNewCategory('');
+      await onCategoriesChanged?.();setCategory(r.category.id);setNewCategory('');
       notify('Category added.');
     }catch(e){setError(e.message);}finally{setAddingCategory(false);}
   }
@@ -76,7 +73,7 @@ export default function ExpenseModal({onClose,onSaved,notify,edit=null}){
         <div className="ep-dialog-scroll space-y-5 py-6">
           <div><label className="field-label" htmlFor="expense-amount">Amount</label><div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 font-display text-3xl text-sage" aria-hidden="true">₹</span><input ref={fieldRef} id="expense-amount" inputMode="decimal" className="field !pl-12 !py-4 !text-2xl" placeholder="0.00" value={amount} onChange={e=>setAmount(e.target.value)} required maxLength={15}/></div></div>
           <div><label className="field-label" htmlFor="expense-description">What was it for?</label><input id="expense-description" className="field" placeholder="e.g. Coffee and snacks" maxLength={100} required value={description} onChange={e=>setDescription(e.target.value)}/></div>
-          <div><label className="field-label" htmlFor="expense-category"><Tag size={15} className="inline mr-1"/> Category</label><select id="expense-category" className="field" value={categoryId} onChange={e=>setCategory(e.target.value)}>{!categories.some(c=>c.id===categoryId)&&<option value={categoryId}>{categoryId}</option>}{categories.map(c=><option key={c.id} value={c.id}>{c.emoji||'✨'} {c.name}</option>)}</select><details className="mt-2"><summary className="cursor-pointer text-xs font-semibold text-sage">+ Create custom category</summary><div className="mt-3 grid grid-cols-[1fr_62px] gap-2"><input className="field" aria-label="New category name" value={newCategory} maxLength={24} placeholder="Category name" onChange={e=>setNewCategory(e.target.value)}/><input className="field !px-2 text-center" aria-label="New category emoji" maxLength={12} value={newEmoji} onChange={e=>setNewEmoji(e.target.value)}/></div><button type="button" className="btn-outline mt-2 !py-1.5" disabled={addingCategory} onClick={addCategory}>{addingCategory?'Creating…':'Add category'}</button></details></div>
+          <div><label className="field-label" htmlFor="expense-category"><Tag size={15} className="inline mr-1"/> Category</label><select id="expense-category" className="field" value={categoryId} onChange={e=>setCategory(e.target.value)}>{!categories.some(c=>c.id===categoryId)&&<option value={categoryId}>{getCategoryName(categoryId,categories)}</option>}{categories.map(c=><option key={c.id} value={c.id}>{c.emoji||'✨'} {c.name}</option>)}</select><details className="mt-2"><summary className="cursor-pointer text-xs font-semibold text-sage">+ Create custom category</summary><div className="mt-3 grid grid-cols-[1fr_62px] gap-2"><input className="field" aria-label="New category name" value={newCategory} maxLength={24} placeholder="Category name" onChange={e=>setNewCategory(e.target.value)}/><input className="field !px-2 text-center" aria-label="New category emoji" maxLength={12} value={newEmoji} onChange={e=>setNewEmoji(e.target.value)}/></div><button type="button" className="btn-outline mt-2 !py-1.5" disabled={addingCategory} onClick={addCategory}>{addingCategory?'Creating…':'Add category'}</button></details></div>
           <div><label className="field-label" htmlFor="expense-date"><CalendarDays size={15} className="inline mr-1"/> Date</label><input id="expense-date" className="field" type="date" value={date} onChange={e=>setDate(e.target.value)} required/></div>
           <div><label className="field-label" htmlFor="expense-note">Note <span className="font-normal text-muted">(optional)</span></label><textarea id="expense-note" className="field min-h-20 resize-y" maxLength={500} placeholder="Anything you'd like to remember?" value={note} onChange={e=>setNote(e.target.value)}/></div>
           <label className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-card-soft px-4 py-3"><span><span className="block text-sm font-semibold">Recurring / subscription</span><span className="mt-1 block text-xs text-muted">Tag it for your own records; no automatic charge is created.</span></span><input className="accent-sage h-5 w-5 shrink-0" type="checkbox" checked={isSubscription} onChange={e=>setSubscription(e.target.checked)}/></label>
