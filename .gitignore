@@ -9,3 +9,9 @@ dist/
 **/serviceAccountKey.json
 **/*service-account*.json
 **/*serviceAccount*.json
+
+# PWA output and private credentials
+client/dist/
+server/serviceAccountKey.json
+**/serviceAccountKey.json
+*.pem

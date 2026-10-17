@@ -93,3 +93,9 @@ a,button,input,select,textarea { -webkit-tap-highlight-color:transparent; }
 }
 @keyframes sheet-in{from{transform:translateY(100%)}to{transform:translateY(0)}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important;}}
+/* ExpensePlus 2.1 PWA notices, safe areas and mobile sheets. */
+.ep-pwa-banner{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:160;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 24px);padding:12px 18px;border-radius:15px;border:1px solid var(--color-terracotta);color:var(--color-cream);background:var(--color-card);box-shadow:0 12px 40px #0008;font-size:13px}
+.ep-pwa-update{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));right:18px;z-index:155;display:flex;align-items:center;gap:12px;max-width:calc(100vw - 36px);padding:16px;border:1px solid var(--color-line);border-radius:20px;background:var(--color-card);box-shadow:0 15px 40px #0008}
+.ep-notification-panel{position:absolute;right:0;top:calc(100% + 12px);z-index:55;width:min(390px,calc(100vw - 28px));max-height:min(70vh,550px);overflow:auto;border:1px solid var(--color-line);border-radius:20px;background:var(--color-card);box-shadow:0 20px 55px #0008;padding:16px}
+@media(max-width:767px){.ep-notification-panel{position:fixed;top:auto;left:10px;right:10px;bottom:calc(80px + env(safe-area-inset-bottom));width:auto;max-height:65dvh}.ep-pwa-update{bottom:calc(90px + env(safe-area-inset-bottom))}}
+html,body,#root{min-height:100%}html{scroll-padding-top:env(safe-area-inset-top)}

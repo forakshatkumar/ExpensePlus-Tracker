@@ -1,17 +1,21 @@
 {
   "name": "expenseplus-server",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
-    "check": "node --check server.js"
+    "check": "node --check server.js",
+    "test": "node test-budget-alerts.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
-    "firebase-admin": "^13.0.0"
+    "firebase-admin": "^13.0.0",
+    "multer": "^2.0.2",
+    "sharp": "^0.34.3",
+    "web-push": "^3.6.7"
   }
 }

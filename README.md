@@ -1,202 +1,116 @@
-# ExpensePlus ✦
+# ExpensePlus 2.1 — Smart Finance PWA Edition
 
-### Track smarter. Spend wiser.
+**Track smarter. Spend wiser. Anywhere.**
 
-**A modern, full-stack expense tracker designed to make everyday money management simple, insightful, and enjoyable.**
+ExpensePlus is a React/Vite + Tailwind personal finance PWA with a Firebase-authenticated Express API and Cloud Firestore. This upgrade builds on the earlier ExpensePlus 2.0 / category-names-fixed project. It keeps the same Firestore user paths and existing dashboard, history, analytics, budget, streak, and profile features.
 
-🌐 **[Live Website](https://expenseplus.vercel.app/)**
+## What's new in 2.1
 
----
+- **PWA**: installation manifest, 192/512/maskable icons, Apple touch icon, service worker that precaches the static app shell, manual iOS install guidance, and update prompt.
+- **Offline privacy**: only the shell/assets are cached, **not** `/api`, Firebase tokens, financial records, or private profile images. Financial changes require a connection.
+- **In-app budget notifications**: thresholds 50/75/90/100%, and above budget; persisted per user in Firestore; deduplicated by month and threshold; notification bell, read/unread controls and preferences.
+- **Pre-save warnings**: projected spending before saving an expense (including edit amounts and selected dates); users can add anyway.
+- **Optional device push**: standard browser Web Push via VAPID. Requires opt-in and backend VAPID setup. Single Workbox service worker handles push and app shell. No FCM SDK / competing worker.
+- **Device avatar upload**: JPEG/PNG/WebP, up to 5 MB; validated and converted by Sharp on the Express backend, privately stored in Firebase Cloud Storage, fetched with a Firebase ID token. Uploaded picture overrides Google photo; restoring Google deletes private photo and clears external override.
+- **Profile**: editable display name, avatar upload, notifications settings, PWA install card. All existing features preserved.
 
-## ✨ About ExpensePlus
-
-**ExpensePlus** is a responsive personal finance web application that helps users track their expenses, analyze spending patterns, manage monthly budgets, and build healthier financial habits.
-
-Designed with a **Warm Playful Editorial** aesthetic, ExpensePlus combines modern UI/UX principles with practical financial tools to deliver a clean and intuitive experience across desktop, tablet, and mobile devices.
-
-The application uses React for the frontend, Node.js and Express for the backend, and Firebase for authentication and data storage.
-
----
-
-## 🚀 Features
-
-### 📊 Interactive Dashboard
-
-- Monthly spending overview.
-- Budget utilization and remaining balance.
-- Recent transaction history.
-- Category-wise spending breakdown.
-- No-spend streak tracking.
-- Responsive financial summary cards.
-
-### 💸 Expense Management
-
-- Add, edit, and delete expenses.
-- Categorize transactions.
-- Create personalized categories with emojis.
-- Record transaction dates and optional notes.
-- Search, filter, and sort transaction history.
-- Export transactions as CSV.
-
-### 📈 Spending Analytics
-
-- Interactive charts using Chart.js.
-- Category-wise spending distribution.
-- Six-month expense comparison.
-- Daily spending trends.
-- Monthly spending insights.
-- Identification of highest spending categories.
-
-### 🎯 Budget Management
-
-- Set personalized monthly budgets.
-- Track budget utilization.
-- View remaining monthly balance.
-- Monitor spending by category.
-- Receive contextual budget warnings.
-
-### 🔥 No-Spend Streaks
-
-- Track spending-free days.
-- Complete daily check-ins.
-- Unlock milestone badges.
-- Monitor current and longest streaks.
-- View activity history.
-
-### 👤 User Profile
-
-- Google account integration.
-- Editable profile details.
-- Profile picture and bio.
-- Financial activity summary.
-- Dark and light appearance options.
-- Secure account sign-out.
-
-### 📱 Responsive UI
-
-- Collapsible sidebar for desktop.
-- Compact expandable sidebar for tablets.
-- Slide-out navigation drawer for mobile.
-- Responsive Add Expense modal and bottom sheet.
-- Smooth animations and reusable UI components.
-
----
-
-## 🛠️ Tech Stack
-
-| Technology              | Purpose                         |
-| ----------------------- | ------------------------------- |
-| React.js                | Frontend development            |
-| Vite                    | Frontend tooling                |
-| Tailwind CSS            | Styling                         |
-| React Router            | Client-side routing             |
-| Chart.js                | Spending visualizations         |
-| Node.js                 | Backend runtime                 |
-| Express.js              | REST API                        |
-| Firebase Authentication | Google Sign-In                  |
-| Cloud Firestore         | Database                        |
-| Firebase Admin SDK      | Secure backend operations       |
-| Vercel                  | Frontend and backend deployment |
-
----
-
-## 📁 Project Structure
+## Structure
 
 ```text
-ExpensePlus/
-├── client/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── expenses/
-│   │   │   ├── layout/
-│   │   │   └── ui/
-│   │   ├── context/
-│   │   ├── lib/
-│   │   ├── pages/
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── index.html
-│   ├── package.json
-│   └── vercel.json
-│
-├── server/
-│   ├── server.js
-│   └── package.json
-│
-├── README.md
-└── package.json
+client/              React + Vite + Tailwind frontend
+  public/icons/      PWA icons
+  src/sw.js          Single PWA / Web Push service worker
+  src/components/pwa/
+  src/components/notifications/
+  src/components/profile/
+  vercel.json        /api rewrite FIRST, SPA fallback second
+server/              Express + Firebase Admin API
+  budgetAlerts.js    Alert threshold and dedup logic
+  test-budget-alerts.mjs
 ```
 
----
+## Local setup
 
-## ⚙️ Getting Started
+Requirements: Node.js 20+, npm, Firebase Auth (Google), Firestore and a Firebase Admin service account.
 
-### Prerequisites
+1. Run `npm install` at the repository root.
+2. Copy `client/.env.example` to `client/.env` and `server/.env.example` to `server/.env`.
+3. Set `GOOGLE_APPLICATION_CREDENTIALS` in `server/.env` to an **absolute** path to your private Firebase Admin service account JSON **outside** the project. Do not commit credentials.
+4. Run `npm run dev` in the root, open `http://localhost:5173`.
+5. `npm run build` produces the Vite PWA at `client/dist`. PWA service workers generally require HTTPS or localhost; the development server does not register the production worker. Use `npm run preview -w client` after building for local PWA testing.
 
-Make sure you have:
+## Vercel deployment — existing two projects
 
-- Node.js 20 or later.
-- npm.
-- A Firebase project.
-- Google Authentication enabled in Firebase.
-- Cloud Firestore enabled.
+**Backend**: Vercel project with root directory `server`, Express entry `server.js` (Vercel imports its default export). Configure under backend **Settings → Environment Variables**:
 
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
-cd YOUR_REPOSITORY
-```
-
-Replace the placeholders with your GitHub repository details.
-
-### 2. Install Dependencies
-
-```bash
-npm install
-```
-
-### 3. Configure Frontend Environment Variables
-
-Create a `.env` file inside the `client` directory.
-
-```env
-VITE_API_URL=http://localhost:4000
-
-VITE_FIREBASE_API_KEY=YOUR_API_KEY
-VITE_FIREBASE_AUTH_DOMAIN=YOUR_AUTH_DOMAIN
-VITE_FIREBASE_PROJECT_ID=YOUR_PROJECT_ID
-VITE_FIREBASE_STORAGE_BUCKET=YOUR_STORAGE_BUCKET
-VITE_FIREBASE_MESSAGING_SENDER_ID=YOUR_SENDER_ID
-VITE_FIREBASE_APP_ID=YOUR_APP_ID
-```
-
-### 4. Configure Backend Environment Variables
-
-Create a `.env` file inside the `server` directory.
-
-```env
-PORT=4000
-FIREBASE_PROJECT_ID=YOUR_PROJECT_ID
+```dotenv
+FIREBASE_PROJECT_ID=spendly-ba3b0
 APP_TIME_ZONE=Asia/Kolkata
-CLIENT_ORIGIN=http://localhost:5173
-GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/service-account.json
+CLIENT_ORIGIN=https://expense-plus-pi-gray.vercel.app
+FIREBASE_STORAGE_BUCKET=spendly-ba3b0.firebasestorage.app
 ```
 
-Keep Firebase Admin credentials private.
+Set `FIREBASE_SERVICE_ACCOUNT_JSON` as a **secret** in the backend containing the complete Firebase Admin service account JSON; never commit or prefix with `VITE_`.
 
-### 5. Run the Application
+**Frontend**: separate Vercel project with root directory `client`, Vite preset, build command `npm run build`, output directory `dist`.
 
-From the project root:
+`client/vercel.json` proxies `/api/:path*` to `https://expenseplus-api.vercel.app/api/:path*` before serving `index.html` for React Router. If you rename your backend, update the rewrite destination. The frontend production API does **not** require `VITE_API_URL` because it uses same-origin `/api` calls. Google sign-in requires authorizing the frontend domain under Firebase Authentication → Settings → Authorized domains.
 
-```bash
-npm run dev
+**PWA assets:** after deployment, verify `/manifest.webmanifest` and `/sw.js` and `https://YOUR_FRONTEND_DOMAIN/api/health`; install and offline features only work where the browser supports them.
+
+### Enable profile-photo upload
+
+The backend service account needs Cloud Storage access to the Firebase Storage bucket. Confirm Firebase Storage is enabled in `spendly-ba3b0` and `FIREBASE_STORAGE_BUCKET` is correct. Firebase Storage may require billing to be enabled. No avatars are made public; `/api/user/avatar` requires the user’s Firebase ID token.
+
+### Enable optional device push
+
+On a trusted development machine run `npx web-push generate-vapid-keys`. Put the resulting **public and private VAPID keys in backend environment variables**:
+
+```dotenv
+VAPID_PUBLIC_KEY=GENERATED_PUBLIC_KEY
+VAPID_PRIVATE_KEY=GENERATED_PRIVATE_KEY
+PUSH_CONTACT_EMAIL=you@example.com
 ```
 
-Frontend:
+Do **not** add the private key to the frontend or GitHub. Redeploy the backend, then on a supported device open Profile → Notification preferences → Enable. This implementation uses the standard Web Push protocol (not Firebase Cloud Messaging) to share a single service worker safely with the PWA. It supports common Chrome, Firefox, Safari, and Edge push services when the platform supports Web Push. iOS requires a supported installed Home Screen web app for Web Push. Push permissions are requested only on button click; in-app alerts work even without them. Browser/platform limitations apply.
 
-http://localhost:5173
+When changing VAPID keys, previously subscribed devices will need to subscribe again.
 
-Backend health endpoint:
+### Privacy and offline limits
 
-http://localhost:400
+The service worker **only precaches static assets**, and never stores authenticated API responses, Firebase credentials, transactions, budgets or profile photos. Expense changes are intentionally not queued offline. Firebase Auth may persist session information through its own SDK, outside service-worker Cache Storage.
+
+### Important Vercel requirement
+
+Frontend production and backend production are separate deployments. Backend changes to notifications, push and avatar routes require redeploying the **backend** too. Commit and push both updated directories; use Vercel to redeploy both projects.
+
+## API additions
+
+All listed paths are authenticated except `/api/health`:
+
+- `GET /api/notifications`
+- `PATCH /api/notifications/:id/read`
+- `POST /api/notifications/read-all`
+- `GET/PUT /api/notifications/preferences`
+- `GET /api/push/config`
+- `POST /api/push/register`
+- `DELETE /api/push/unregister`
+- `GET /api/user/avatar` — private image bytes
+- `POST /api/user/avatar` — multipart field `avatar`, up to 5 MB
+- `DELETE /api/user/avatar`
+- Existing `PUT /api/user/profile` now also accepts an editable `name` string.
+
+Notification records: `users/{uid}/notifications/{id}`; preference document: `users/{uid}/settings/notifications`; device subscriptions: `users/{uid}/pushSubscriptions/{sha256-endpoint}`; avatar path in `users/{uid}.avatarPath`. No migration needed for existing expense data.
+
+## Testing
+
+Run `npm run test -w server` for budget logic and deterministic alert dedup tests, `npm run check -w server` for backend syntax, and `npm run build -w client` for production output.
+
+**Verification limitations at handoff:** The JavaScript and JSX parser and relative-import checks passed; backend syntax and budget notification unit tests passed. `npm install` timed out in the build environment, so the Vite production build, live Firebase Storage upload and real device Web Push were **not** verified here. See `IMPLEMENTATION-NOTES.md` for required hands-on checks.
+
+## Security notes
+
+- Keep `server/.env`, `client/.env`, Admin JSON and VAPID **private** key out of GitHub.
+- The app never caches user financial data in service-worker storage.
+- Cloud Storage access and push notification permissions must be configured by the site owner.
+- You are responsible for reviewing IAM, Firebase Auth authorized domains and billing before production use.

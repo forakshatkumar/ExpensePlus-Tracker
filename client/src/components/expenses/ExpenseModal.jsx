@@ -1,8 +1,8 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {X,WalletCards,CalendarDays,Tag} from 'lucide-react';
 import {api} from '../../lib/api';
-import {dateToday,getCategoryName} from '../../lib/format';
-export default function ExpenseModal({onClose,onSaved,notify,edit=null,categories=[],onCategoriesChanged}){
+import {dateToday,getCategoryName,inr} from '../../lib/format';
+export default function ExpenseModal({onClose,onSaved,notify,edit=null,categories=[],onCategoriesChanged,transactions=[],monthlyBudget=0,online=true}){
   const [amount,setAmount]=useState(edit?String((edit.amountCents/100).toFixed(2)):'');
   const [description,setDescription]=useState(edit?.description||'');
   const [categoryId,setCategory]=useState(edit?.categoryId||'food');
@@ -14,6 +14,7 @@ export default function ExpenseModal({onClose,onSaved,notify,edit=null,categorie
   const [addingCategory,setAddingCategory]=useState(false);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
+  const [showBudgetConfirm,setShowBudgetConfirm]=useState(false);
   const fieldRef=useRef(null);
   const dialogRef=useRef(null);
   const closeRef=useRef(null);
@@ -48,14 +49,21 @@ export default function ExpenseModal({onClose,onSaved,notify,edit=null,categorie
       notify('Category added.');
     }catch(e){setError(e.message);}finally{setAddingCategory(false);}
   }
+  const amountCents=Math.round(Number(amount||0)*100);
+  const month=date.slice(0,7);
+  const currentSpent=transactions.filter(t=>t.date?.startsWith(month)&&(!edit||t.id!==edit.id)).reduce((sum,t)=>sum+t.amountCents,0)/100;
+  const projected=currentSpent+amountCents/100;
+  const crossing=monthlyBudget>0&&Number.isFinite(projected)&&[75,90,100].some(t=>currentSpent/monthlyBudget*100<t&&projected/monthlyBudget*100>=t);
   async function save(e){
     e.preventDefault();if(busy)return;
+    if(!online){setError('Connect to the internet before saving financial changes.');return;}
     const parsed=amount.trim();
     if(!/^\d+(?:\.\d{1,2})?$/.test(parsed)){setError('Enter a positive amount with up to two decimal places.');return;}
     const cents=Math.round(Number(parsed)*100);
     if(!Number.isSafeInteger(cents)||cents<1||cents>100_000_000_000){setError('Enter a valid expense amount.');return;}
     if(!description.trim()||description.trim().length>100){setError('Description must be between 1 and 100 characters.');return;}
     if(note.length>500){setError('Notes must be within 500 characters.');return;}
+    if(crossing&&!showBudgetConfirm){setShowBudgetConfirm(true);return;}
     setBusy(true);setError('');
     try{
       const payload={amountCents:cents,description:description.trim(),categoryId,date,note:note.trim(),isSubscription};
@@ -77,9 +85,11 @@ export default function ExpenseModal({onClose,onSaved,notify,edit=null,categorie
           <div><label className="field-label" htmlFor="expense-date"><CalendarDays size={15} className="inline mr-1"/> Date</label><input id="expense-date" className="field" type="date" value={date} onChange={e=>setDate(e.target.value)} required/></div>
           <div><label className="field-label" htmlFor="expense-note">Note <span className="font-normal text-muted">(optional)</span></label><textarea id="expense-note" className="field min-h-20 resize-y" maxLength={500} placeholder="Anything you'd like to remember?" value={note} onChange={e=>setNote(e.target.value)}/></div>
           <label className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-card-soft px-4 py-3"><span><span className="block text-sm font-semibold">Recurring / subscription</span><span className="mt-1 block text-xs text-muted">Tag it for your own records; no automatic charge is created.</span></span><input className="accent-sage h-5 w-5 shrink-0" type="checkbox" checked={isSubscription} onChange={e=>setSubscription(e.target.checked)}/></label>
+          {monthlyBudget>0&&Number.isFinite(projected)&&amountCents>0&&<div className={`rounded-xl border px-4 py-3 text-sm ${projected>=monthlyBudget?'border-terracotta/50 bg-terracotta/10':'border-line bg-card-soft'}`}><p className="font-semibold">Projected monthly spending: {inr(projected)}</p><p className="mt-1 text-muted">Budget: {inr(monthlyBudget)} · {inr(Math.max(0,monthlyBudget-projected))} left</p>{crossing&&<p className="mt-2 text-terracotta">This expense would cross a budget warning threshold. You can still add it.</p>}</div>}
+          {showBudgetConfirm&&<div className="rounded-xl border border-terracotta bg-terracotta/10 p-4" role="alert"><p className="font-semibold">You're nearing your budget</p><p className="mt-2 text-sm text-muted">This expense will bring your monthly spending to {inr(projected)} out of {inr(monthlyBudget)}.</p><div className="mt-3 flex gap-2"><button type="button" className="btn-outline" onClick={()=>setShowBudgetConfirm(false)}>Review expense</button><button type="button" className="btn-primary" disabled={busy} onClick={()=>{const form=dialogRef.current?.querySelector('form');form?.requestSubmit();}}>Add anyway</button></div></div>}
           {error&&<p role="alert" className="rounded-xl border border-terracotta/40 bg-terracotta/10 p-3 text-sm text-terracotta">{error}</p>}
         </div>
-        <div className="ep-modal-actions"><button type="button" className="btn-outline" onClick={requestClose} disabled={busy}>Cancel</button><button type="submit" className="btn-primary" disabled={busy}><WalletCards size={17}/>{busy?'Saving…':edit?'Save changes':'Save expense'}</button></div>
+        <div className="ep-modal-actions"><button type="button" className="btn-outline" onClick={requestClose} disabled={busy}>Cancel</button><button type="submit" className="btn-primary" disabled={busy||!online}><WalletCards size={17}/>{busy?'Saving…':edit?'Save changes':'Save expense'}</button></div>
       </form>
     </section>
   </div>;

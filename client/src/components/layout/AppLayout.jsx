@@ -2,7 +2,8 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {Outlet,useLocation,useOutletContext} from 'react-router-dom';
 import {Plus} from 'lucide-react';
 import {useAuth} from '../../context/AuthContext';
-import {api} from '../../lib/api';
+import {api,apiBinary} from '../../lib/api';
+import {useOnlineStatus} from '../pwa/PWAProvider';
 import {categoryEmoji,categoryLabels} from '../../lib/format';
 import Sidebar from './Sidebar';
 import MobileDrawer from './MobileDrawer';
@@ -14,6 +15,11 @@ const builtInCategories = Object.entries(categoryLabels).map(([id,name])=>({id,n
 const empty={profile:null,transactions:[],streak:null,categories:builtInCategories};
 export default function AppLayout(){
   const {user}=useAuth();
+  const online=useOnlineStatus();
+  const [notifications,setNotifications]=useState([]);
+  const wasOnline=useRef(true);
+  const [avatarUrl,setAvatarUrl]=useState('');
+  const avatarRef=useRef('');
   const {pathname}=useLocation();
   const [data,setData]=useState(empty);
   const [loading,setLoading]=useState(true);
@@ -34,6 +40,23 @@ export default function AppLayout(){
   const refreshTransactions=useCallback(async()=>{const r=await api('/api/transactions');setData(prev=>({...prev,transactions:r.transactions}));return r.transactions;},[]);
   const refreshStreak=useCallback(async()=>{const r=await api('/api/streaks');setData(prev=>({...prev,streak:r}));return r;},[]);
   const refreshCategories=useCallback(async()=>{const r=await api('/api/categories');setData(prev=>({...prev,categories:r.categories||builtInCategories}));return r.categories||builtInCategories;},[]);
+  const refreshNotifications=useCallback(async()=>{const r=await api('/api/notifications');setNotifications(r.notifications||[]);return r.notifications;},[]);
+  const markNotificationRead=useCallback(async(id)=>{try{await api(`/api/notifications/${id}/read`,{method:'PATCH'});await refreshNotifications();}catch(e){notify(e.message,'error');}},[refreshNotifications,notify]);
+  const markNotificationsRead=useCallback(async()=>{try{await api('/api/notifications/read-all',{method:'POST'});await refreshNotifications();}catch(e){notify(e.message,'error');}},[refreshNotifications,notify]);
+  const refreshAvatar=useCallback(async()=>{
+    const blob=await apiBinary('/api/user/avatar').catch(error=>{if(!/No custom avatar|404/.test(error.message))console.warn('Avatar:',error.message);return null;});
+    const url=blob?URL.createObjectURL(blob):'';
+    if(avatarRef.current)URL.revokeObjectURL(avatarRef.current);
+    avatarRef.current=url;setAvatarUrl(url);
+  },[]);
+  useEffect(()=>()=>{if(avatarRef.current)URL.revokeObjectURL(avatarRef.current);},[]);
+  useEffect(()=>{
+    if(avatarRef.current)URL.revokeObjectURL(avatarRef.current);
+    avatarRef.current='';setAvatarUrl('');setNotifications([]);
+  },[user?.uid]);
+  useEffect(()=>{if(data.profile?.hasCustomAvatar)refreshAvatar();else{if(avatarRef.current)URL.revokeObjectURL(avatarRef.current);avatarRef.current='';setAvatarUrl('');}},[data.profile?.hasCustomAvatar,refreshAvatar,user?.uid]);
+  useEffect(()=>{if(data.profile&&online)refreshNotifications().catch(error=>console.warn('Notifications:',error.message));},[data.profile?.createdAt,online,refreshNotifications]);
+  useEffect(()=>{if(online&&!wasOnline.current){refreshAll().catch(error=>notify(error.message,'error'));}wasOnline.current=online;},[online]);
   const refreshAll=useCallback(async()=>{
     const [p,t,s,c]=await Promise.all([
       api('/api/user/profile'), api('/api/transactions'), api('/api/streaks'),
@@ -42,16 +65,17 @@ export default function AppLayout(){
     ]);
     setData({profile:p.profile,transactions:t.transactions,streak:s,categories:c.categories||builtInCategories});
   },[]);
-  const refreshAfterExpense=useCallback(()=>Promise.all([refreshTransactions(),refreshStreak(),refreshCategories()]),[refreshTransactions,refreshStreak,refreshCategories]);
+  const refreshAfterExpense=useCallback(()=>Promise.all([refreshTransactions(),refreshStreak(),refreshCategories(),refreshNotifications()]),[refreshTransactions,refreshStreak,refreshCategories,refreshNotifications]);
   useEffect(()=>{let active=true;setLoading(true);refreshAll().then(()=>{if(active)setError('');}).catch(e=>{if(active)setError(e.message);}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[refreshAll,user?.uid]);
   useEffect(()=>{try{localStorage.setItem('expenseplus-sidebar-collapsed',String(collapsed));}catch{}},[collapsed]);
   useEffect(()=>{closeDrawer();},[pathname,closeDrawer]);
-  const context={...data,refreshProfile,refreshTransactions,refreshStreak,refreshCategories,refreshAll,refreshAfterExpense,notify,openExpense};
+  const displayProfile=data.profile?{...data.profile,profilePicture:avatarUrl||data.profile.profilePicture}:null;
+  const context={...data,avatarUrl,refreshProfile,refreshAvatar,refreshTransactions,refreshStreak,refreshCategories,refreshAll,refreshAfterExpense,refreshNotifications,notify,openExpense};
   return <div className={`ep-app-shell ${collapsed?'ep-app-collapsed':''}`}>
-    <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} profile={data.profile} user={user}/>
-    <MobileDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={menuRef} profile={data.profile} user={user}/>
+    <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} profile={displayProfile} user={user}/>
+    <MobileDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={menuRef} profile={displayProfile} user={user}/>
     <div className="ep-app-content">
-      <Topbar profile={data.profile} user={user} onMenu={()=>setDrawerOpen(true)} drawerOpen={drawerOpen} menuRef={menuRef} onAdd={()=>openExpense()}/>
+      <Topbar profile={displayProfile} user={user} onMenu={()=>setDrawerOpen(true)} drawerOpen={drawerOpen} menuRef={menuRef} onAdd={()=>openExpense()} notifications={notifications} onRead={markNotificationRead} onReadAll={markNotificationsRead}/>
       <main className="ep-main" id="main-content">
         {loading?<div className="space-y-5" role="status"><div className="skeleton h-20 max-w-md"/><div className="grid gap-5 md:grid-cols-2"><div className="skeleton h-64"/><div className="skeleton h-64"/></div></div>
           :error&&!data.profile?<section className="panel mx-auto max-w-lg text-center"><h2 className="font-display text-2xl">Couldn't load your workspace</h2><p className="subtext">{error}</p><button className="btn-primary mt-6" onClick={()=>{setLoading(true);refreshAll().then(()=>setError('')).catch(e=>setError(e.message)).finally(()=>setLoading(false));}}>Try again</button></section>
@@ -59,8 +83,8 @@ export default function AppLayout(){
       </main>
       <footer className="px-6 pb-8 text-center text-xs text-muted">ExpensePlus ✦ Track smarter. Spend wiser.</footer>
     </div>
-    <button aria-label="Add an expense" title="Add expense" className="ep-fab" onClick={()=>openExpense()}><Plus size={25}/></button>
-    {expense&&<ExpenseModal key={expense.edit?.id||'new'} edit={expense.edit} onClose={closeExpense} notify={notify} onSaved={refreshAfterExpense} categories={data.categories} onCategoriesChanged={refreshCategories}/>}
+    <button aria-label="Add an expense" className="ep-fab" onClick={()=>openExpense()} disabled={!online} title={!online?"Reconnect before adding expenses":"Add expense"}><Plus size={25}/></button>
+    {expense&&<ExpenseModal key={expense.edit?.id||'new'} edit={expense.edit} onClose={closeExpense} notify={notify} onSaved={refreshAfterExpense} categories={data.categories} onCategoriesChanged={refreshCategories} transactions={data.transactions} monthlyBudget={data.profile?.monthlyBudget||0} online={online}/>}
     <Toast toast={toast} onClose={()=>setToast(null)}/>
   </div>;
 }

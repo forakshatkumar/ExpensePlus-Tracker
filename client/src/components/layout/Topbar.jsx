@@ -2,7 +2,8 @@ import {Link, useLocation} from 'react-router-dom';
 import {Menu,Plus} from 'lucide-react';
 import {Avatar} from './Sidebar';
 import {pageTitles} from './navigation';
-export default function Topbar({profile,user,onMenu,menuRef,onAdd,drawerOpen=false}){
+import NotificationBell from '../notifications/NotificationBell';
+export default function Topbar({profile,user,onMenu,menuRef,onAdd,drawerOpen=false,notifications=[],onRead,onReadAll}){
   const {pathname}=useLocation();
   return <header className="ep-topbar">
     <div className="flex min-w-0 items-center gap-3">
@@ -11,6 +12,7 @@ export default function Topbar({profile,user,onMenu,menuRef,onAdd,drawerOpen=fal
       <div className="hidden md:block"><p className="text-[11px] uppercase tracking-[.19em] text-muted">Your money, in focus</p><h1 className="font-display text-[24px] leading-7 text-cream">{pageTitles[pathname]||'ExpensePlus'}</h1></div>
     </div>
     <div className="flex items-center gap-2 sm:gap-3">
+      <NotificationBell items={notifications} onRead={onRead} onReadAll={onReadAll}/>
       <button className="btn-primary !hidden !px-4 sm:!inline-flex" onClick={onAdd}><Plus size={17}/> Add expense</button>
       <Link to="/profile" className="flex items-center gap-2 rounded-full border border-line bg-card p-1 pr-1 sm:pr-3 transition hover:border-sage/60" aria-label="Go to profile">
         <Avatar user={user} profile={profile} size="h-9 w-9"/>

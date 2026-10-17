@@ -37,3 +37,22 @@ export async function api(path, options = {}) {
   }
   return data;
 }
+
+// Authenticated binary endpoints are never persisted in Cache Storage.
+export async function apiBinary(path,options={}){
+  if(!path.startsWith('/api/'))throw new Error('Invalid API route.');
+  const user=auth.currentUser;
+  if(!user)throw new Error('Please sign in to continue.');
+  const token=await user.getIdToken();
+  const response=await fetch(`${baseUrl}${path}`,{...options,headers:{Authorization:`Bearer ${token}`,...options.headers},cache:'no-store'});
+  if(!response.ok){let message='Unable to load image.';try{message=(await response.json()).error||message;}catch{}throw new Error(message);}
+  return response.blob();
+}
+export async function apiUpload(path,file){
+  const form=new FormData();form.append('avatar',file);
+  const user=auth.currentUser;if(!user)throw new Error('Please sign in to continue.');
+  const response=await fetch(`${baseUrl}${path}`,{method:'POST',body:form,headers:{Authorization:`Bearer ${await user.getIdToken()}`},cache:'no-store'});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data.error||'Picture upload failed.');
+  return data;
+}

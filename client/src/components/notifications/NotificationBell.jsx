@@ -1,0 +1,11 @@
+import {useEffect,useRef,useState} from 'react';
+import {Bell,CheckCheck} from 'lucide-react';
+import {useNavigate} from 'react-router-dom';
+export default function NotificationBell({items=[],onRead,onReadAll}){
+  const [open,setOpen]=useState(false);const wrap=useRef(null);const navigate=useNavigate();
+  const unread=items.filter(item=>!item.readAt).length;
+  useEffect(()=>{if(!open)return;const listener=e=>{if(e.key==='Escape'||(wrap.current&&!wrap.current.contains(e.target)))setOpen(false);};document.addEventListener('pointerdown',listener);document.addEventListener('keydown',listener);return()=>{document.removeEventListener('pointerdown',listener);document.removeEventListener('keydown',listener);};},[open]);
+  return <div ref={wrap} className="relative"><button type="button" className="icon-button relative" aria-expanded={open} aria-label={`Notifications, ${unread} unread`} onClick={()=>setOpen(v=>!v)}><Bell size={21}/>{unread>0&&<span className="absolute -right-1 -top-1 rounded-full bg-terracotta px-1 text-[10px] text-espresso">{unread>9?'9+':unread}</span>}</button>
+    {open&&<section className="ep-notification-panel" aria-label="Notifications"><div className="mb-3 flex items-center justify-between gap-2"><h2 className="font-display text-xl">Notifications</h2><button onClick={onReadAll} disabled={!unread} className="text-xs text-sage disabled:opacity-40"><CheckCheck size={14} className="inline"/> Mark all read</button></div>{items.length===0?<p className="py-6 text-sm text-muted">No notifications yet. Budget milestones will appear here.</p>:items.map(item=><button type="button" key={item.id} className={`block w-full rounded-xl border-b border-line p-3 text-left hover:bg-card-soft ${!item.readAt?'bg-sage/5':''}`} onClick={()=>{if(!item.readAt)onRead(item.id);setOpen(false);navigate('/budgets');}}><span className="flex items-center justify-between gap-3"><strong className="text-sm">{item.title}</strong>{!item.readAt&&<span className="h-2 w-2 shrink-0 rounded-full bg-terracotta"/>}</span><span className="mt-1 block text-xs leading-5 text-muted">{item.message}</span>{item.createdAt&&<span className="mt-1 block text-[11px] text-muted">{new Date(item.createdAt).toLocaleDateString('en-IN')}</span>}</button>)}</section>}
+  </div>;
+}

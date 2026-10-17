@@ -6,6 +6,10 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import admin from "firebase-admin";
+import multer from "multer";
+import sharp from "sharp";
+import webpush from "web-push";
+import {checkBudgetAlerts,normalizePreferences,DEFAULT_PREFERENCES} from "./budgetAlerts.js";
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -33,6 +37,24 @@ admin.initializeApp({
 });
 const db = admin.firestore();
 const { FieldValue } = admin.firestore;
+const VAPID_PUBLIC=process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE=process.env.VAPID_PRIVATE_KEY || '';
+if(VAPID_PUBLIC && VAPID_PRIVATE)webpush.setVapidDetails('mailto:'+(process.env.PUSH_CONTACT_EMAIL||'admin@example.com'),VAPID_PUBLIC,VAPID_PRIVATE);
+const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:5*1024*1024,files:1}});
+async function pushToSubscriptions(userDoc,payload){
+  if(!VAPID_PUBLIC||!VAPID_PRIVATE)return;
+  const snap=await userDoc.collection('pushSubscriptions').get();
+  await Promise.all(snap.docs.map(async doc=>{
+    try{await webpush.sendNotification(doc.data().subscription,JSON.stringify(payload),{TTL:300});}
+    catch(error){if([404,410].includes(error.statusCode))await doc.ref.delete();else console.error('Push unavailable:',error.message);}
+  }));
+}
+const triggerAlerts = async (req,dates)=>{
+  for(const month of new Set(dates.filter(isDate).map(d=>d.slice(0,7)).filter(m=>m===appToday().slice(0,7)))){
+    try{await checkBudgetAlerts({db,admin,userDoc:userRef(req),month,sendPush:pushToSubscriptions});}
+    catch(error){console.error('Noncritical budget alert failure:',error);}
+  }
+};
 
 const DEFAULT_BIO = "B.Tech CSE student at ABES Engineering College | Building clean, mindful web experiences";
 const BADGE_DAYS = [5, 10, 15, 20, 30];
@@ -104,6 +126,7 @@ async function ensureUser(req) {
     profilePicture: req.user.picture || "",
     bio: DEFAULT_BIO,
     monthlyBudget: DEFAULT_MONTHLY_BUDGET,
+    avatarPath: "",
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -118,13 +141,106 @@ function publicProfile(data) {
     profilePicture: data.profilePicture || "", bio: data.bio ?? DEFAULT_BIO,
     monthlyBudget: Number.isInteger(data.monthlyBudget) ? data.monthlyBudget : DEFAULT_MONTHLY_BUDGET,
     createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
+    hasCustomAvatar:Boolean(data.avatarPath),
   };
 }
 
 // The root route helps identify an API deployment accidentally used as the frontend.
 app.get("/", (_req, res) => res.json({ service: "ExpensePlus API", status: "running", frontend: "Deploy the client folder as a separate Vercel project.", health: "/api/health" }));
 app.get("/api/health", (_req, res) => res.json({ ok: true, service: "expenseplus-api" }));
+app.use("/api", (_req,res,next)=>{res.set("Cache-Control","private, no-store");res.set("X-Content-Type-Options","nosniff");next();});
 app.use("/api", authenticate);
+
+// Notifications are per-user, stored separately from private financial records.
+app.get('/api/notifications',async(req,res,next)=>{try{
+  const snap=await userRef(req).collection('notifications').orderBy('createdAt','desc').limit(60).get();
+  res.set('Cache-Control','private, no-store');
+  res.json({notifications:snap.docs.map(doc=>({id:doc.id,...doc.data(),createdAt:doc.data().createdAt?.toDate?.()?.toISOString()||null,readAt:doc.data().readAt?.toDate?.()?.toISOString()||null}))});
+}catch(e){next(e);}});
+app.patch('/api/notifications/:id/read',async(req,res,next)=>{try{
+  if(!/^[a-zA-Z0-9-]{1,120}$/.test(req.params.id))return respondError(res,400,'Invalid notification ID.');
+  const ref=userRef(req).collection('notifications').doc(req.params.id);
+  if(!(await ref.get()).exists)return respondError(res,404,'Notification not found.');
+  await ref.update({readAt:FieldValue.serverTimestamp()});res.json({ok:true});
+}catch(e){next(e);}});
+app.post('/api/notifications/read-all',async(req,res,next)=>{try{
+  const snap=await userRef(req).collection('notifications').where('readAt','==',null).limit(400).get();
+  const batch=db.batch();snap.docs.forEach(d=>batch.update(d.ref,{readAt:FieldValue.serverTimestamp()}));
+  if(!snap.empty)await batch.commit();res.json({ok:true});
+}catch(e){next(e);}});
+app.get('/api/notifications/preferences',async(req,res,next)=>{try{
+  const doc=await userRef(req).collection('settings').doc('notifications').get();res.json({preferences:normalizePreferences(doc.data())});
+}catch(e){next(e);}});
+app.put('/api/notifications/preferences',async(req,res,next)=>{try{
+  const raw=req.body||{};
+  if(typeof raw!=='object'||Array.isArray(raw)||Object.keys(raw).some(k=>!['inAppBudgetAlerts','thresholds','pushEnabled'].includes(k)))return respondError(res,400,'Invalid notification preferences.');
+  if('inAppBudgetAlerts'in raw&&typeof raw.inAppBudgetAlerts!=='boolean')return respondError(res,400,'Invalid alert setting.');
+  if('pushEnabled'in raw&&typeof raw.pushEnabled!=='boolean')return respondError(res,400,'Invalid push setting.');
+  if('thresholds'in raw&&(!Array.isArray(raw.thresholds)||raw.thresholds.some(x=>![50,75,90,100].includes(x))))return respondError(res,400,'Invalid thresholds.');
+  const ref=userRef(req).collection('settings').doc('notifications');
+  await ref.set(raw,{merge:true});res.json({preferences:normalizePreferences((await ref.get()).data())});
+}catch(e){next(e);}});
+app.get('/api/push/config',(_req,res)=>res.json({publicKey:VAPID_PUBLIC||null}));
+app.post('/api/push/register',async(req,res,next)=>{try{
+  if(!VAPID_PUBLIC)return respondError(res,503,'Web Push is not configured on the backend.');
+  const sub=req.body?.subscription;
+  // Only known browser push service origins may be used as push delivery targets.
+  let pushHost='';try{pushHost=new URL(sub?.endpoint).hostname.toLowerCase();}catch{}
+  const allowedPushHost = pushHost==='fcm.googleapis.com' || pushHost==='updates.push.services.mozilla.com' || pushHost==='web.push.apple.com' || pushHost.endsWith('.notify.windows.com') || pushHost.endsWith('.push.apple.com');
+  if(!allowedPushHost)return respondError(res,400,'Unsupported browser push provider.');
+  if(!sub||typeof sub.endpoint!=='string'||!sub.endpoint.startsWith('https://')||sub.endpoint.length>2000||!sub.keys||typeof sub.keys.p256dh!=='string'||typeof sub.keys.auth!=='string')return respondError(res,400,'Invalid push subscription.');
+  const id=(await import('node:crypto')).createHash('sha256').update(sub.endpoint).digest('hex');
+  await userRef(req).collection('pushSubscriptions').doc(id).set({subscription:sub,createdAt:FieldValue.serverTimestamp()});
+  await userRef(req).collection('settings').doc('notifications').set({pushEnabled:true},{merge:true});res.json({ok:true});
+}catch(e){next(e);}});
+app.delete('/api/push/unregister',async(req,res,next)=>{try{
+  const endpoint=req.body?.endpoint;
+  if(typeof endpoint!=='string'||!endpoint.startsWith('https://'))return respondError(res,400,'Invalid endpoint.');
+  const id=(await import('node:crypto')).createHash('sha256').update(endpoint).digest('hex');
+  await userRef(req).collection('pushSubscriptions').doc(id).delete();
+  const remaining=await userRef(req).collection('pushSubscriptions').limit(1).get();
+  await userRef(req).collection('settings').doc('notifications').set({pushEnabled:!remaining.empty},{merge:true});res.json({ok:true});
+}catch(e){next(e);}});
+// Authenticated avatar streaming: never publish an unrestricted download URL.
+app.get('/api/user/avatar',async(req,res,next)=>{try{
+  const path=(await ensureUser(req)).avatarPath;
+  if(!path)return respondError(res,404,'No custom avatar.');
+  const bucket=admin.storage().bucket(process.env.FIREBASE_STORAGE_BUCKET||'spendly-ba3b0.firebasestorage.app');
+  const [buffer]=await bucket.file(path).download();
+  res.set('Cache-Control','private, no-store');res.type('image/webp').send(buffer);
+}catch(e){next(e);}});
+app.post('/api/user/avatar',upload.single('avatar'),async(req,res,next)=>{try{
+  if(!req.file)return respondError(res,400,'Choose a JPEG, PNG, or WebP image.');
+  if(!['image/jpeg','image/png','image/webp'].includes(req.file.mimetype))return respondError(res,400,'Use JPEG, PNG, or WebP.');
+  // Validate the detected file format in addition to the browser-reported MIME type.
+  // Sharp also normalizes orientation and strips EXIF/GPS metadata on conversion.
+  let image;
+  try {
+    const input = sharp(req.file.buffer, {limitInputPixels: 20_000_000});
+    const metadata = await input.metadata();
+    const mimeForFormat = {jpeg:'image/jpeg', png:'image/png', webp:'image/webp'};
+    if (!mimeForFormat[metadata.format] || mimeForFormat[metadata.format] !== req.file.mimetype) {
+      return respondError(res, 400, 'Image content does not match JPEG, PNG, or WebP.');
+    }
+    image = await input.rotate().resize(512,512,{fit:'cover',position:'attention'}).webp({quality:82}).toBuffer();
+  } catch {return respondError(res,400,'The selected image is invalid or too large.');}
+  const bucket=admin.storage().bucket(process.env.FIREBASE_STORAGE_BUCKET||'spendly-ba3b0.firebasestorage.app');
+  const ref=userRef(req);const user=await ensureUser(req);
+  const id=(await import('node:crypto')).randomUUID();
+  const path=`profile-images/${req.user.uid}/${id}.webp`;
+  await bucket.file(path).save(image,{resumable:false,contentType:'image/webp',metadata:{cacheControl:'private,no-store'}});
+  try{await ref.update({avatarPath:path,updatedAt:FieldValue.serverTimestamp()});}
+  catch(error){await bucket.file(path).delete({ignoreNotFound:true});throw error;}
+  if(user.avatarPath&&user.avatarPath.startsWith(`profile-images/${req.user.uid}/`))await bucket.file(user.avatarPath).delete({ignoreNotFound:true}).catch(e=>console.error('Old avatar cleanup:',e));
+  res.json({profile:publicProfile((await ref.get()).data())});
+}catch(e){next(e);}});
+app.delete('/api/user/avatar',async(req,res,next)=>{try{
+  const ref=userRef(req);const user=await ensureUser(req);
+  await ref.update({avatarPath:'',profilePicture:'',updatedAt:FieldValue.serverTimestamp()});
+  if(user.avatarPath&&user.avatarPath.startsWith(`profile-images/${req.user.uid}/`))await admin.storage().bucket(process.env.FIREBASE_STORAGE_BUCKET||'spendly-ba3b0.firebasestorage.app').file(user.avatarPath).delete({ignoreNotFound:true}).catch(e=>console.error('Avatar cleanup:',e));
+  res.json({profile:publicProfile((await ref.get()).data())});
+}catch(e){next(e);}});
+
 
 // GET /api/user/profile — automatically creates missing user document.
 app.get("/api/user/profile", async (req, res, next) => {
@@ -135,13 +251,17 @@ app.get("/api/user/profile", async (req, res, next) => {
 // PUT /api/user/profile — only editable fields may be supplied.
 app.put("/api/user/profile", async (req, res, next) => {
   try {
-    const allowed = ["bio", "profilePicture", "monthlyBudget"];
+    const allowed = ["name", "bio", "profilePicture", "monthlyBudget"];
     const body = req.body;
     if (!body || typeof body !== "object" || Array.isArray(body)) return respondError(res, 400, "Provide a JSON object.");
     if (Object.keys(body).length === 0 || Object.keys(body).some((key) => !allowed.includes(key))) {
-      return respondError(res, 400, "Only bio, profilePicture, and monthlyBudget may be updated.");
+      return respondError(res, 400, "Only name, bio, profilePicture, and monthlyBudget may be updated.");
     }
     const changes = {};
+    if ("name" in body) {
+      if(typeof body.name!=="string"||!body.name.trim()||body.name.trim().length>80)return respondError(res,400,"Display name must be 1–80 characters.");
+      changes.name=body.name.trim();
+    }
     if ("bio" in body) {
       if (typeof body.bio !== "string" || body.bio.length > 300) return respondError(res, 400, "Bio must be at most 300 characters.");
       changes.bio = body.bio;
@@ -158,6 +278,7 @@ app.put("/api/user/profile", async (req, res, next) => {
     }
     await ensureUser(req);
     await userRef(req).update({ ...changes, updatedAt: FieldValue.serverTimestamp() });
+    if("monthlyBudget" in changes)await triggerAlerts(req,[appToday()]);
     res.json({ profile: publicProfile((await userRef(req).get()).data()) });
   } catch (error) { next(error); }
 });
@@ -224,6 +345,7 @@ app.post("/api/transactions", async (req, res, next) => {
     batch.set(ref,{...body,createdAt:FieldValue.serverTimestamp()});
     batch.delete(userRef(req).collection("mindfulDays").doc(body.date));
     await batch.commit();
+    await triggerAlerts(req,[body.date]);
     res.status(201).json({transaction:{id:ref.id,...body}});
   }catch(error){next(error);}
 });
@@ -242,6 +364,7 @@ app.put("/api/transactions/:id", async (req,res,next)=>{
     // Editing an expense must invalidate a check-in on its new date.
     batch.delete(userRef(req).collection("mindfulDays").doc(data.date));
     await batch.commit();
+    await triggerAlerts(req,[original.data()?.date,data.date].filter(Boolean));
     res.json({transaction:{id:ref.id,...data}});
   }catch(error){next(error);}
 });
@@ -249,7 +372,10 @@ app.put("/api/transactions/:id", async (req,res,next)=>{
 app.delete("/api/transactions/:id", async (req, res, next) => {
   try {
     if (!validExpenseId(req.params.id)) return respondError(res, 400, "Invalid transaction ID.");
-    await userRef(req).collection("expenses").doc(req.params.id).delete();
+    const expenseRef=userRef(req).collection("expenses").doc(req.params.id);
+    const old=await expenseRef.get();
+    await expenseRef.delete();
+    if(old.exists&&isDate(old.data()?.date))await triggerAlerts(req,[old.data().date]);
     res.json({ ok: true });
   } catch (error) { next(error); }
 });
@@ -319,6 +445,7 @@ app.post("/api/streaks", async (req, res, next) => {
 });
 
 app.use((error, _req, res, _next) => {
+  if (error?.code === "LIMIT_FILE_SIZE") return res.status(413).json({error:"Image must be 5 MB or smaller."});
   console.error("API error:", error);
   if (!res.headersSent) res.status(500).json({ error: "Internal server error. Check backend logs." });
 });
