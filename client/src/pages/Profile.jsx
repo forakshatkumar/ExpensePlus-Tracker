@@ -1,0 +1,31 @@
+import {useEffect,useState} from 'react';
+import {useNavigate} from 'react-router-dom';
+import {Link} from 'react-router-dom';
+import {LogOut,Save,ShieldCheck,UserRound,Sun,Moon,ArrowUpRight,Camera,Mail,CalendarDays} from 'lucide-react';
+import {useAuth} from '../context/AuthContext';
+import {useAppData} from '../components/layout/AppLayout';
+import {api} from '../lib/api';
+import {dateToday,inr} from '../lib/format';
+export const DEFAULT_BIO='B.Tech CSE student at ABES Engineering College | Building clean, mindful web experiences';
+export default function Profile(){
+  const {profile,transactions,streak,refreshProfile,notify}=useAppData();
+  const {user,logout}=useAuth();const navigate=useNavigate();
+  const [bio,setBio]=useState(profile?.bio||DEFAULT_BIO);const [picture,setPicture]=useState(profile?.profilePicture||'');
+  const [saving,setSaving]=useState(false);
+  const [theme,setTheme]=useState(()=>{try{return localStorage.getItem('expenseplus-theme')==='light'?'light':'dark';}catch{return 'dark';}});
+  useEffect(()=>{setBio(profile?.bio??DEFAULT_BIO);setPicture(profile?.profilePicture||'');},[profile?.bio,profile?.profilePicture]);
+  useEffect(()=>{document.documentElement.classList.toggle('light-theme',theme==='light');try{localStorage.setItem('expenseplus-theme',theme);}catch{}},[theme]);
+  const name=profile?.name||user?.displayName||'Akshat Kumar';
+  const pictureSrc=picture||user?.photoURL;
+  const thisMonth=transactions.filter(t=>t.date.startsWith(dateToday().slice(0,7))).reduce((s,t)=>s+t.amountCents,0)/100;
+  const count=[5,10,15,20,30].filter(x=>x<=(streak?.highestStreak||0)).length;
+  async function save(e){e.preventDefault();setSaving(true);try{await api('/api/user/profile',{method:'PUT',body:JSON.stringify({bio,profilePicture:picture})});await refreshProfile();notify('Profile changes saved.');}catch(e){notify(e.message,'error');}finally{setSaving(false);}}
+  async function signOut(){try{await logout();navigate('/login',{replace:true});}catch(e){notify(e.message,'error');}}
+  return <div className="space-y-6"><div><p className="eyebrow">Your corner of ExpensePlus</p><h1 className="page-heading">My profile <span className="text-sage">✦</span></h1><p className="subtext">Make this space feel a little more like you.</p></div>
+    <section className="panel relative overflow-hidden"><div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-sage/10 blur-3xl"/><div className="relative flex flex-wrap items-center gap-5">{pictureSrc?<img src={pictureSrc} className="h-24 w-24 rounded-[26px] border-2 border-sage/40 object-cover" alt={`${name}'s profile`} referrerPolicy="no-referrer"/>:<div className="grid h-24 w-24 place-items-center rounded-[26px] bg-sage/15 text-sage"><UserRound size={38}/></div>}<div className="min-w-0"><p className="eyebrow">ExpensePlus member</p><h2 className="mt-2 font-display text-3xl sm:text-4xl">{name}</h2><p className="mt-2 break-all text-sm text-muted">{profile?.email||user?.email}</p><p className="mt-3 max-w-2xl text-sm leading-6 text-cream/80">{profile?.bio||DEFAULT_BIO}</p></div></div></section>
+    <div className="grid gap-5 lg:grid-cols-[1.15fr_.85fr]"><section className="panel"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-sage/15 text-sage"><Camera size={19}/></span><h2 className="font-display text-2xl">Edit profile</h2></div><form onSubmit={save} className="mt-6 space-y-5"><div><label htmlFor="profile-bio" className="field-label">About you</label><textarea id="profile-bio" className="field min-h-30 resize-y" maxLength={300} value={bio} onChange={e=>setBio(e.target.value)} placeholder={DEFAULT_BIO}/><p className="mt-2 text-right text-xs text-muted">{bio.length}/300</p></div><div><label htmlFor="picture-url" className="field-label">Profile photo URL</label><input id="picture-url" className="field" type="url" placeholder="https://example.com/photo.png" value={picture} onChange={e=>setPicture(e.target.value)}/><p className="mt-2 text-xs text-muted">Leave blank to use your Google account picture.</p></div><button className="btn-primary" type="submit" disabled={saving}><Save size={17}/>{saving?'Saving…':'Save profile'}</button></form></section>
+      <div className="space-y-5"><section className="panel"><h2 className="font-display text-2xl">Your highlights</h2><div className="mt-5 grid grid-cols-2 gap-4">{[['Expenses',transactions.length],['This month',inr(thisMonth)],['Longest streak',`${streak?.highestStreak||0} days`],['Badges earned',`${count}/5`]].map(([label,value])=><div key={label} className="rounded-2xl bg-espresso p-4"><p className="text-xs text-muted">{label}</p><p className="mt-2 break-words font-display text-xl">{value}</p></div>)}</div><Link to="/budgets" className="mt-5 inline-flex items-center gap-1 text-sm text-sage">Manage your budget <ArrowUpRight size={15}/></Link></section>
+      <section className="panel"><h2 className="font-display text-2xl">Appearance</h2><p className="mt-2 text-sm text-muted">Choose the mood that suits you.</p><div className="mt-4 grid grid-cols-2 gap-2"><button onClick={()=>setTheme('dark')} className={`btn-outline !rounded-xl ${theme==='dark'?'!border-sage !text-sage':''}`} aria-pressed={theme==='dark'}><Moon size={16}/> Dark</button><button onClick={()=>setTheme('light')} className={`btn-outline !rounded-xl ${theme==='light'?'!border-sage !text-sage':''}`} aria-pressed={theme==='light'}><Sun size={16}/> Light</button></div></section></div></div>
+    <section className="panel flex flex-wrap items-start justify-between gap-6"><div><div className="flex items-center gap-2 text-sage"><ShieldCheck size={19}/><span className="text-sm font-semibold">Your account is protected</span></div><p className="mt-2 text-sm text-muted">Google Authentication · {profile?.createdAt?'Joined '+new Date(profile.createdAt).toLocaleDateString('en-IN'):'Secure account'}</p><p className="mt-1 text-sm text-muted">Your expenses and budget are stored through the authenticated Express API.</p></div><button onClick={signOut} className="btn-outline !border-terracotta/50 !text-terracotta hover:!bg-terracotta/10"><LogOut size={17}/> Sign out</button></section>
+  </div>;
+}
