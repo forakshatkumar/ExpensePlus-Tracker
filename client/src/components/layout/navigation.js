@@ -6,4 +6,4 @@ export const navigation = [
   {to:'/budgets',label:'Budgets',Icon:Target},
   {to:'/streaks',label:'Streaks',Icon:Flame},
 ];
-export const pageTitles = { '/dashboard':'Dashboard', '/history':'History', '/analytics':'Analytics', '/budgets':'Budgets', '/streaks':'Streaks', '/profile':'My profile' };
+export const pageTitles = { '/dashboard':'Dashboard', '/history':'History', '/analytics':'Analytics', '/budgets':'Budgets', '/streaks':'Streaks', '/profile':'My profile', '/settings':'Settings' };

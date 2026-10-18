@@ -40,7 +40,7 @@ const { FieldValue } = admin.firestore;
 const VAPID_PUBLIC=process.env.VAPID_PUBLIC_KEY || '';
 const VAPID_PRIVATE=process.env.VAPID_PRIVATE_KEY || '';
 if(VAPID_PUBLIC && VAPID_PRIVATE)webpush.setVapidDetails('mailto:'+(process.env.PUSH_CONTACT_EMAIL||'admin@example.com'),VAPID_PUBLIC,VAPID_PRIVATE);
-const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:5*1024*1024,files:1}});
+const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:4*1024*1024,files:1}});
 async function pushToSubscriptions(userDoc,payload){
   if(!VAPID_PUBLIC||!VAPID_PRIVATE)return;
   const snap=await userDoc.collection('pushSubscriptions').get();
@@ -201,46 +201,86 @@ app.delete('/api/push/unregister',async(req,res,next)=>{try{
   const remaining=await userRef(req).collection('pushSubscriptions').limit(1).get();
   await userRef(req).collection('settings').doc('notifications').set({pushEnabled:!remaining.empty},{merge:true});res.json({ok:true});
 }catch(e){next(e);}});
-// Authenticated avatar streaming: never publish an unrestricted download URL.
-app.get('/api/user/avatar',async(req,res,next)=>{try{
-  const path=(await ensureUser(req)).avatarPath;
-  if(!path)return respondError(res,404,'No custom avatar.');
-  const bucket=admin.storage().bucket(process.env.FIREBASE_STORAGE_BUCKET||'spendly-ba3b0.firebasestorage.app');
-  const [buffer]=await bucket.file(path).download();
-  res.set('Cache-Control','private, no-store');res.type('image/webp').send(buffer);
-}catch(e){next(e);}});
-app.post('/api/user/avatar',upload.single('avatar'),async(req,res,next)=>{try{
-  if(!req.file)return respondError(res,400,'Choose a JPEG, PNG, or WebP image.');
-  if(!['image/jpeg','image/png','image/webp'].includes(req.file.mimetype))return respondError(res,400,'Use JPEG, PNG, or WebP.');
-  // Validate the detected file format in addition to the browser-reported MIME type.
-  // Sharp also normalizes orientation and strips EXIF/GPS metadata on conversion.
-  let image;
-  try {
-    const input = sharp(req.file.buffer, {limitInputPixels: 20_000_000});
-    const metadata = await input.metadata();
-    const mimeForFormat = {jpeg:'image/jpeg', png:'image/png', webp:'image/webp'};
-    if (!mimeForFormat[metadata.format] || mimeForFormat[metadata.format] !== req.file.mimetype) {
-      return respondError(res, 400, 'Image content does not match JPEG, PNG, or WebP.');
-    }
-    image = await input.rotate().resize(512,512,{fit:'cover',position:'attention'}).webp({quality:82}).toBuffer();
-  } catch {return respondError(res,400,'The selected image is invalid or too large.');}
-  const bucket=admin.storage().bucket(process.env.FIREBASE_STORAGE_BUCKET||'spendly-ba3b0.firebasestorage.app');
-  const ref=userRef(req);const user=await ensureUser(req);
-  const id=(await import('node:crypto')).randomUUID();
-  const path=`profile-images/${req.user.uid}/${id}.webp`;
-  await bucket.file(path).save(image,{resumable:false,contentType:'image/webp',metadata:{cacheControl:'private,no-store'}});
-  try{await ref.update({avatarPath:path,updatedAt:FieldValue.serverTimestamp()});}
-  catch(error){await bucket.file(path).delete({ignoreNotFound:true});throw error;}
-  if(user.avatarPath&&user.avatarPath.startsWith(`profile-images/${req.user.uid}/`))await bucket.file(user.avatarPath).delete({ignoreNotFound:true}).catch(e=>console.error('Old avatar cleanup:',e));
-  res.json({profile:publicProfile((await ref.get()).data())});
-}catch(e){next(e);}});
-app.delete('/api/user/avatar',async(req,res,next)=>{try{
-  const ref=userRef(req);const user=await ensureUser(req);
-  await ref.update({avatarPath:'',profilePicture:'',updatedAt:FieldValue.serverTimestamp()});
-  if(user.avatarPath&&user.avatarPath.startsWith(`profile-images/${req.user.uid}/`))await admin.storage().bucket(process.env.FIREBASE_STORAGE_BUCKET||'spendly-ba3b0.firebasestorage.app').file(user.avatarPath).delete({ignoreNotFound:true}).catch(e=>console.error('Avatar cleanup:',e));
-  res.json({profile:publicProfile((await ref.get()).data())});
-}catch(e){next(e);}});
+// Avatar storage that works on existing Firestore without requiring the paid
+// Firebase Cloud Storage bucket. Photos are reduced to a small WebP and stored
+// in users/{uid}/privateAssets/avatar. Only this authenticated API reads them.
+// Older Storage-backed avatars are still readable and can be replaced safely.
+const FIRESTORE_AVATAR_PATH = 'firestore:avatar';
+function avatarDocument(req){return userRef(req).collection('privateAssets').doc('avatar');}
+function previousStorageObject(req,path){
+  if(!path || path===FIRESTORE_AVATAR_PATH || !path.startsWith(`profile-images/${req.user.uid}/`))return null;
+  return admin.storage().bucket(process.env.FIREBASE_STORAGE_BUCKET||'spendly-ba3b0.firebasestorage.app').file(path);
+}
 
+app.get('/api/user/avatar',async(req,res,next)=>{
+  try{
+    const path=(await ensureUser(req)).avatarPath;
+    if(!path)return respondError(res,404,'No custom avatar.');
+    let buffer;
+    if(path===FIRESTORE_AVATAR_PATH){
+      const document=await avatarDocument(req).get();
+      const base64=document.data()?.webpBase64;
+      if(typeof base64!=='string'||!base64)return respondError(res,404,'Avatar not found. Please upload a new photo.');
+      buffer=Buffer.from(base64,'base64');
+    }else{
+      const previous=previousStorageObject(req,path);
+      if(!previous)return respondError(res,404,'Avatar not found. Please upload a new photo.');
+      try{[buffer]=await previous.download();}
+      catch(error){
+        console.warn('Legacy Firebase Storage avatar unavailable:',error.code||error.message);
+        return respondError(res,404,'Previous picture is unavailable. Upload a new photo to replace it.');
+      }
+    }
+    res.set('Cache-Control','private, no-store');
+    res.type('image/webp').send(buffer);
+  }catch(error){next(error);}
+});
+app.post('/api/user/avatar',upload.single('avatar'),async(req,res,next)=>{
+  try{
+    if(!req.file)return respondError(res,400,'Choose a JPEG, PNG, or WebP image.');
+    if(!['image/jpeg','image/png','image/webp'].includes(req.file.mimetype))return respondError(res,400,'Use JPEG, PNG, or WebP.');
+    let image;
+    try{
+      const input=sharp(req.file.buffer,{limitInputPixels:20_000_000});
+      const metadata=await input.metadata();
+      const actualMime={jpeg:'image/jpeg',png:'image/png',webp:'image/webp'}[metadata.format];
+      if(actualMime!==req.file.mimetype)return respondError(res,400,'Image content does not match JPEG, PNG, or WebP.');
+      // Store only a compact square avatar. No EXIF metadata is retained.
+      image=await input.rotate().resize(320,320,{fit:'cover',position:'attention'}).webp({quality:77,effort:4}).toBuffer();
+      if(image.length>150_000){
+        image=await sharp(image).resize(224,224).webp({quality:65,effort:4}).toBuffer();
+      }
+      if(image.length>150_000)return respondError(res,413,'This photo could not be reduced enough. Try a different JPEG or PNG.');
+    }catch(error){
+      console.warn('Rejected avatar image:',error.message);
+      return respondError(res,400,'The selected photo could not be processed. Choose a valid JPEG, PNG, or WebP under 4 MB.');
+    }
+    const previous=await ensureUser(req);
+    const batch=db.batch();
+    batch.set(avatarDocument(req),{webpBase64:image.toString('base64'),contentType:'image/webp',updatedAt:FieldValue.serverTimestamp()});
+    batch.update(userRef(req),{avatarPath:FIRESTORE_AVATAR_PATH,updatedAt:FieldValue.serverTimestamp()});
+    await batch.commit();
+    // Best-effort cleanup. Old bucket failures must not break successful uploads.
+    const oldObject=previousStorageObject(req,previous.avatarPath);
+    if(oldObject)oldObject.delete({ignoreNotFound:true}).catch(error=>console.warn('Legacy avatar cleanup:',error.message));
+    res.json({profile:publicProfile((await userRef(req).get()).data())});
+  }catch(error){
+    console.error('Avatar Firestore persistence failed:',error.code||error.message);
+    next(error);
+  }
+});
+app.delete('/api/user/avatar',async(req,res,next)=>{
+  try{
+    const previous=await ensureUser(req);
+    const batch=db.batch();
+    batch.delete(avatarDocument(req));
+    batch.update(userRef(req),{avatarPath:'',profilePicture:'',updatedAt:FieldValue.serverTimestamp()});
+    await batch.commit();
+    const oldObject=previousStorageObject(req,previous.avatarPath);
+    if(oldObject)oldObject.delete({ignoreNotFound:true}).catch(error=>console.warn('Legacy avatar cleanup:',error.message));
+    res.json({profile:publicProfile((await userRef(req).get()).data())});
+  }catch(error){next(error);}
+});
 
 // GET /api/user/profile — automatically creates missing user document.
 app.get("/api/user/profile", async (req, res, next) => {
@@ -445,7 +485,7 @@ app.post("/api/streaks", async (req, res, next) => {
 });
 
 app.use((error, _req, res, _next) => {
-  if (error?.code === "LIMIT_FILE_SIZE") return res.status(413).json({error:"Image must be 5 MB or smaller."});
+  if (error?.code === "LIMIT_FILE_SIZE") return res.status(413).json({error:"Image must be 4 MB or smaller (Vercel upload limit)."});
   console.error("API error:", error);
   if (!res.headersSent) res.status(500).json({ error: "Internal server error. Check backend logs." });
 });

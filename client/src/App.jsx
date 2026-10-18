@@ -8,6 +8,7 @@ import Analytics from './pages/Analytics';
 import Budgets from './pages/Budgets';
 import Streaks from './pages/Streaks';
 import Profile from './pages/Profile';
+import Settings from './pages/Settings';
 
 function RequireAuth() {
   const {user, loading} = useAuth();
@@ -27,6 +28,7 @@ export default function App() {
       <Route path="/budgets" element={<Budgets/>}/>
       <Route path="/streaks" element={<Streaks/>}/>
       <Route path="/profile" element={<Profile/>}/>
+      <Route path="/settings" element={<Settings/>}/>
     </Route>
     <Route path="*" element={<Navigate to="/dashboard" replace/>}/>
   </Routes>;

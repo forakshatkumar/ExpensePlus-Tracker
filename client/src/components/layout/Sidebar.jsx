@@ -1,5 +1,5 @@
-import {Link} from 'react-router-dom';
-import {ChevronLeft, ChevronRight, WalletCards, UserRound} from 'lucide-react';
+import {Link,NavLink} from 'react-router-dom';
+import {ChevronLeft, ChevronRight, WalletCards, UserRound, Settings2} from 'lucide-react';
 import NavigationItems from './NavigationItems';
 export function Avatar({profile,user,size='h-9 w-9'}){
   const pic=profile?.profilePicture||user?.photoURL;
@@ -18,7 +18,10 @@ export default function Sidebar({collapsed,setCollapsed,profile,user}) {
     {collapsed&&<button type="button" className="icon-button my-4 self-center" aria-label="Expand sidebar" title="Expand sidebar" onClick={()=>setCollapsed(false)}><ChevronRight size={18}/></button>}
     {!collapsed&&<p className="my-5 px-4 text-[10px] font-bold uppercase tracking-[.2em] text-muted">Your workspace</p>}
     <div className={collapsed?'mt-8':'mt-1'}><NavigationItems collapsed={collapsed}/></div>
-    <div className="mt-auto border-t border-line/80 pt-4">
+    <div className="mt-auto space-y-2 border-t border-line/80 pt-4">
+      <NavLink to="/settings" title={collapsed?'Settings':undefined} aria-label={collapsed?'Settings':undefined} className={({isActive})=>`nav-item ${isActive?'nav-item-active':''} ${collapsed?'justify-center':''}`}>
+        <Settings2 size={19} strokeWidth={1.8}/><span className={collapsed?'sr-only':''}>Settings</span>
+      </NavLink>
       <Link to="/profile" title={collapsed?'Profile':undefined} aria-label={collapsed?'Profile':undefined} className={`flex items-center rounded-2xl p-2.5 transition hover:bg-card-soft ${collapsed?'justify-center':'gap-3'}`}>
         <Avatar profile={profile} user={user}/>
         {!collapsed&&<div className="min-w-0"><p className="truncate text-sm font-semibold text-cream">{profile?.name||user?.displayName||'Member'}</p><p className="text-xs text-muted">View profile ↗</p></div>}
