@@ -1,6 +1,7 @@
-import {useEffect,useState} from 'react';
+import {useState} from 'react';
 import {useNavigate} from 'react-router-dom';
-import {LogOut,Moon,ShieldCheck,Sun} from 'lucide-react';
+import {LogOut,ShieldCheck} from 'lucide-react';
+import ThemeAppearance from '../components/settings/ThemeAppearance';
 import {useAuth} from '../context/AuthContext';
 import {useAppData} from '../components/layout/AppLayout';
 import {api} from '../lib/api';
@@ -11,9 +12,7 @@ export default function Settings(){
   const {notify}=useAppData();
   const {logout}=useAuth();
   const navigate=useNavigate();
-  const [theme,setTheme]=useState(()=>{try{return localStorage.getItem('expenseplus-theme')==='light'?'light':'dark';}catch{return 'dark';}});
   const [signingOut,setSigningOut]=useState(false);
-  useEffect(()=>{document.documentElement.classList.toggle('light-theme',theme==='light');try{localStorage.setItem('expenseplus-theme',theme);}catch{}},[theme]);
   async function signOut(){
     setSigningOut(true);
     try{
@@ -30,13 +29,11 @@ export default function Settings(){
   }
   return <div className="space-y-6">
     <div><p className="eyebrow">Make it yours</p><h1 className="page-heading">Settings <span className="text-sage">✦</span></h1><p className="subtext">Set the mood, stay informed, and manage your app experience.</p></div>
-    <div className="grid gap-5 xl:grid-cols-2">
-      <section className="panel"><div className="flex items-center gap-3"><Sun size={21} className="text-sage"/><h2 className="font-display text-2xl">Appearance</h2></div><p className="subtext">Choose the look that works best for you. Your preference stays on this device.</p>
-        <div className="mt-5 grid grid-cols-2 gap-3"><button type="button" onClick={()=>setTheme('dark')} aria-pressed={theme==='dark'} className={`btn-outline !rounded-xl ${theme==='dark'?'!border-sage !text-sage':''}`}><Moon size={17}/> Dark</button><button type="button" onClick={()=>setTheme('light')} aria-pressed={theme==='light'} className={`btn-outline !rounded-xl ${theme==='light'?'!border-sage !text-sage':''}`}><Sun size={17}/> Light</button></div>
-      </section>
-      <InstallAppCard/>
+    <ThemeAppearance/>
+    <div className="grid gap-4 xl:grid-cols-12">
+      <div className="xl:col-span-7"><NotificationSettings notify={notify}/></div>
+      <div className="xl:col-span-5"><InstallAppCard/></div>
     </div>
-    <NotificationSettings notify={notify}/>
     <section className="panel flex flex-wrap items-start justify-between gap-5"><div><div className="flex items-center gap-2"><ShieldCheck size={20} className="text-sage"/><h2 className="font-display text-2xl">Account & security</h2></div><p className="subtext">Your financial records are protected with Google Sign-In and authenticated API requests.</p><p className="mt-3 text-xs text-muted">Signing out also disconnects push notifications on this device where supported.</p></div><button type="button" className="btn-outline !border-terracotta/60 !text-terracotta hover:!bg-terracotta/10" onClick={signOut} disabled={signingOut}><LogOut size={17}/>{signingOut?'Signing out…':'Sign out'}</button></section>
   </div>;
 }

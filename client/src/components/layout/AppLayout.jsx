@@ -8,6 +8,7 @@ import {categoryEmoji,categoryLabels} from '../../lib/format';
 import Sidebar from './Sidebar';
 import MobileDrawer from './MobileDrawer';
 import Topbar from './Topbar';
+import BottomNavigation from './BottomNavigation';
 import ExpenseModal from '../expenses/ExpenseModal';
 import Toast from '../ui/Toast';
 export function useAppData(){ return useOutletContext(); }
@@ -25,10 +26,6 @@ export default function AppLayout(){
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
   const [toast,setToast]=useState(null);
-  useEffect(()=>{
-    try{document.documentElement.classList.toggle('light-theme',localStorage.getItem('expenseplus-theme')==='light');}
-    catch{document.documentElement.classList.remove('light-theme');}
-  },[]);
   const [collapsed,setCollapsed]=useState(()=>{
     try{const stored=localStorage.getItem('expenseplus-sidebar-collapsed');return stored!==null?stored==='true':window.matchMedia('(min-width: 768px) and (max-width: 1023px)').matches;}catch{return false;}
   });
@@ -79,7 +76,7 @@ export default function AppLayout(){
     <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} profile={displayProfile} user={user}/>
     <MobileDrawer open={drawerOpen} onClose={closeDrawer} returnFocusRef={menuRef} profile={displayProfile} user={user}/>
     <div className="ep-app-content">
-      <Topbar onMenu={()=>setDrawerOpen(true)} drawerOpen={drawerOpen} menuRef={menuRef} onAdd={()=>openExpense()} notifications={notifications} onRead={markNotificationRead} onReadAll={markNotificationsRead}/>
+      <Topbar onAdd={()=>openExpense()} notifications={notifications} onRead={markNotificationRead} onReadAll={markNotificationsRead}/>
       <main className="ep-main" id="main-content">
         {loading?<div className="space-y-5" role="status"><div className="skeleton h-20 max-w-md"/><div className="grid gap-5 md:grid-cols-2"><div className="skeleton h-64"/><div className="skeleton h-64"/></div></div>
           :error&&!data.profile?<section className="panel mx-auto max-w-lg text-center"><h2 className="font-display text-2xl">Couldn't load your workspace</h2><p className="subtext">{error}</p><button className="btn-primary mt-6" onClick={()=>{setLoading(true);refreshAll().then(()=>setError('')).catch(e=>setError(e.message)).finally(()=>setLoading(false));}}>Try again</button></section>
@@ -87,6 +84,7 @@ export default function AppLayout(){
       </main>
       <footer className="px-6 pb-8 text-center text-xs text-muted">ExpensePlus ✦ Track smarter. Spend wiser.</footer>
     </div>
+    <BottomNavigation onMore={()=>setDrawerOpen(true)} menuOpen={drawerOpen} menuRef={menuRef}/>
     <button aria-label="Add an expense" className="ep-fab" onClick={()=>openExpense()} disabled={!online} title={!online?"Reconnect before adding expenses":"Add expense"}><Plus size={25}/></button>
     {expense&&<ExpenseModal key={expense.edit?.id||'new'} edit={expense.edit} onClose={closeExpense} notify={notify} onSaved={refreshAfterExpense} categories={data.categories} onCategoriesChanged={refreshCategories} transactions={data.transactions} monthlyBudget={data.profile?.monthlyBudget||0} online={online}/>}
     <Toast toast={toast} onClose={()=>setToast(null)}/>
