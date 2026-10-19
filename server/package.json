@@ -1,13 +1,13 @@
 {
   "name": "expenseplus-server",
   "private": true,
-  "version": "2.1.0",
+  "version": "3.1.0",
   "type": "module",
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
     "check": "node --check server.js",
-    "test": "node test-budget-alerts.mjs"
+    "test": "node --test test-budget-alerts.mjs test-savings.mjs test-savings-routes.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",

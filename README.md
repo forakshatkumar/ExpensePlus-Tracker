@@ -1,33 +1,32 @@
-# ExpensePlus 3.0
+# ExpensePlus 3.1
 
-**Track smarter. Spend wiser.**
+**Track smarter. Spend wiser. Save for what matters.**
 
-A polished personal expense-tracking PWA built with React, Vite, Tailwind CSS, Express, and Firebase. ExpensePlus helps users understand spending, manage monthly budgets, and build better money habits.
+ExpensePlus is a modern personal-finance PWA built with React, Tailwind CSS, Express and Firebase. Track spending, manage budgets and build savings habits through a focused, mobile-friendly experience.
 
-[**Try ExpensePlus**](https://expense-plus-pi-gray.vercel.app)
+[**Live application**](https://expense-plus-pi-gray.vercel.app)
 
 ### Highlights
 
-- Secure Google sign-in and individual user accounts
-- Expense history, search, filters, custom categories and CSV export
-- Monthly budgets, spending notifications and thoughtful analytics
-- No-spend streaks, milestones and editable user profiles
-- Four customizable visual themes, each with light and dark mode
-- Responsive desktop, tablet and mobile interface with PWA installation
+- Google authentication with user-scoped financial records
+- Expense tracking, categories, filters and financial analytics
+- Monthly budgets, notifications and no-spend streaks
+- **Savings Hub:** cumulative deposits, withdrawals, monthly history and personal savings goals
+- Four themes with light/dark appearance settings
+- Responsive desktop, tablet and mobile experience, installable as a PWA
 
-### Getting started
+### Development
 
 ```bash
-npm install
-npm run dev
+cd client && npm install && npm run dev
+# In a separate terminal:
+cd server && npm install && npm run dev
 ```
 
-Configure your own local Firebase client and server environment variables as described in `client/.env.example` and `server/.env.example`. Never commit private credentials.
+Set up your Firebase and API environment variables using the `.env.example` files. Keep credentials private.
 
-### Deployment
+### Deployment and testing
 
-React frontend and Express API are deployed as separate Vercel projects. See [V3-DEPLOY-GUIDE.md](V3-DEPLOY-GUIDE.md) for setup, test and rollout instructions.
+ExpensePlus uses separate Vercel frontend and Express API projects. For this update, **deploy both projects**. See [V31-DEPLOY-GUIDE.md](V31-DEPLOY-GUIDE.md) and [release notes](V31-RELEASE-NOTES.md).
 
-### Project
-
-Developed by [Akshat Kumar](https://github.com/forakshatkumar) as a personal portfolio application available for anyone to use.
+Made by [Akshat Kumar](https://github.com/forakshatkumar). Publicly usable as a personal portfolio project.

@@ -1,6 +1,6 @@
 import {Suspense,useCallback,useEffect,useRef,useState} from 'react';
 import {Outlet,useLocation,useOutletContext,useNavigate} from 'react-router-dom';
-import {Plus} from 'lucide-react';
+import {Plus,Menu} from 'lucide-react';
 import {useAuth} from '../../context/AuthContext';
 import {api,apiBinary} from '../../lib/api';
 import {useOnlineStatus} from '../pwa/PWAProvider';
@@ -8,7 +8,6 @@ import {categoryEmoji,categoryLabels} from '../../lib/format';
 import Sidebar from './Sidebar';
 import MobileDrawer from './MobileDrawer';
 import Topbar from './Topbar';
-import BottomNavigation from './BottomNavigation';
 import ExpenseModal from '../expenses/ExpenseModal';
 import Toast from '../ui/Toast';
 export function useAppData(){ return useOutletContext(); }
@@ -97,8 +96,10 @@ export default function AppLayout(){
       </main>
       <footer className="px-6 pb-8 text-center text-xs text-muted">ExpensePlus ✦ Track smarter. Spend wiser.</footer>
     </div>
-    <BottomNavigation onMore={()=>setDrawerOpen(true)} menuOpen={drawerOpen} menuRef={menuRef}/>
-    <button aria-label="Add an expense" className="ep-fab" onClick={()=>openExpense()} disabled={!online} title={!online?"Reconnect before adding expenses":"Add expense"}><Plus size={25}/></button>
+    <div className={`v31-mobile-actions ${drawerOpen||expense?'v31-actions-hidden':''}`} aria-label="Mobile actions" aria-hidden={Boolean(drawerOpen||expense)} inert={Boolean(drawerOpen||expense)}>
+      <button type="button" className="v31-mobile-add" onClick={()=>openExpense()} disabled={!online}><Plus size={19}/> Add expense</button>
+      <button ref={menuRef} type="button" className="v31-mobile-more" onClick={()=>setDrawerOpen(true)} aria-expanded={drawerOpen} aria-controls="expenseplus-mobile-navigation"><Menu size={19}/> More</button>
+    </div>
     {expense&&<ExpenseModal key={expense.edit?.id||'new'} edit={expense.edit} onClose={closeExpense} notify={notify} onSaved={refreshAfterExpense} categories={data.categories} onCategoriesChanged={refreshCategories} transactions={data.transactions} monthlyBudget={data.profile?.monthlyBudget||0} online={online}/>}
     <Toast toast={toast} onClose={()=>setToast(null)}/>
   </div>;

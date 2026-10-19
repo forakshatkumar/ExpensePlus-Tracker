@@ -9,6 +9,7 @@ import admin from "firebase-admin";
 import multer from "multer";
 import sharp from "sharp";
 import webpush from "web-push";
+import registerSavingsRoutes from "./savingsRoutes.js";
 import {
   checkBudgetAlerts,
   normalizePreferences,
@@ -236,6 +237,8 @@ app.use("/api", (_req, res, next) => {
   next();
 });
 app.use("/api", authenticate);
+// Private, transactional savings ledger and goal allocations.
+registerSavingsRoutes(app,{db,FieldValue,userRef,isDate,appToday,respondError});
 
 // Notifications are per-user, stored separately from private financial records.
 app.get("/api/notifications", async (req, res, next) => {

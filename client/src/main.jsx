@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import "./styles/refined.css";
+import "./styles/v31.css";
 import {applyThemeAttributes,readThemePreferences} from "./themeConfig";
 
 const mount = document.getElementById("root");

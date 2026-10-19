@@ -37,7 +37,7 @@ export default function NotificationSettings({notify}){
       }
     }catch(e){notify(e.message,'error');}finally{setSaving(false);}
   }
-  return <section className="panel"><div className="flex items-center gap-3"><Bell size={21} className="text-sage"/><h2 className="font-display text-2xl">Notification preferences</h2></div><p className="subtext">Helpful budget milestones, never automatic charges or spending blocks.</p>
+  return <section className="v31-subsettings"><div className="flex items-center gap-2"><Bell size={18} className="text-sage"/><h2 className="font-semibold text-base">Budget alerts</h2></div><p className="mt-2 text-xs text-muted">Choose the alerts that are useful to you.</p>
     {loading?<p className="mt-4 text-sm text-muted">Loading preferences…</p>:<div className="mt-5 space-y-4">
       <label className="flex items-center justify-between gap-3 text-sm">In-app budget alerts <input type="checkbox" className="h-5 w-5 accent-sage" checked={prefs.inAppBudgetAlerts} disabled={saving||!online} onChange={e=>update({inAppBudgetAlerts:e.target.checked})}/></label>
       <fieldset><legend className="field-label">Notify me at</legend><div className="mt-2 flex flex-wrap gap-4">{[50,75,90,100].map(value=><label key={value} className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-sage" checked={prefs.thresholds.includes(value)} disabled={saving||!online} onChange={e=>update({thresholds:e.target.checked?[...prefs.thresholds,value]:prefs.thresholds.filter(v=>v!==value)})}/>{value}%</label>)}</div></fieldset>

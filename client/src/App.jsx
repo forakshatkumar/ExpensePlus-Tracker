@@ -10,6 +10,7 @@ const Budgets = lazy(() => import('./pages/Budgets'))
 const Streaks = lazy(() => import('./pages/Streaks'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Settings = lazy(() => import('./pages/Settings'))
+const Savings = lazy(() => import('./pages/Savings'))
 
 function RequireAuth () {
   const { user, loading } = useAuth()
@@ -40,6 +41,7 @@ export default function App () {
         <Route path='/streaks' element={<Streaks />} />
         <Route path='/profile' element={<Profile />} />
         <Route path='/settings' element={<Settings />} />
+        <Route path='/savings' element={<Savings />} />
       </Route>
       <Route path='*' element={<Navigate to='/dashboard' replace />} />
     </Routes>
