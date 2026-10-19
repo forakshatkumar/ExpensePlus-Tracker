@@ -1,14 +1,15 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { lazy } from 'react'
 import { useAuth } from './context/AuthContext'
 import AppLayout from './components/layout/AppLayout'
 import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import History from './pages/History'
-import Analytics from './pages/Analytics'
-import Budgets from './pages/Budgets'
-import Streaks from './pages/Streaks'
-import Profile from './pages/Profile'
-import Settings from './pages/Settings'
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const History = lazy(() => import('./pages/History'))
+const Analytics = lazy(() => import('./pages/Analytics'))
+const Budgets = lazy(() => import('./pages/Budgets'))
+const Streaks = lazy(() => import('./pages/Streaks'))
+const Profile = lazy(() => import('./pages/Profile'))
+const Settings = lazy(() => import('./pages/Settings'))
 
 function RequireAuth () {
   const { user, loading } = useAuth()

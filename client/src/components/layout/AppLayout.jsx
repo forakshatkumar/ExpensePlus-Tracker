@@ -1,5 +1,5 @@
-import {useCallback,useEffect,useRef,useState} from 'react';
-import {Outlet,useLocation,useOutletContext} from 'react-router-dom';
+import {Suspense,useCallback,useEffect,useRef,useState} from 'react';
+import {Outlet,useLocation,useOutletContext,useNavigate} from 'react-router-dom';
 import {Plus} from 'lucide-react';
 import {useAuth} from '../../context/AuthContext';
 import {api,apiBinary} from '../../lib/api';
@@ -22,6 +22,7 @@ export default function AppLayout(){
   const [avatarUrl,setAvatarUrl]=useState('');
   const avatarRef=useRef('');
   const {pathname}=useLocation();
+  const navigate=useNavigate();
   const [data,setData]=useState(empty);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
@@ -70,6 +71,18 @@ export default function AppLayout(){
   useEffect(()=>{let active=true;setLoading(true);refreshAll().then(()=>{if(active)setError('');}).catch(e=>{if(active)setError(e.message);}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[refreshAll,user?.uid]);
   useEffect(()=>{try{localStorage.setItem('expenseplus-sidebar-collapsed',String(collapsed));}catch{}},[collapsed]);
   useEffect(()=>{closeDrawer();},[pathname,closeDrawer]);
+  // Keep route changes anchored at the top, and provide a lightweight power-user shortcut.
+  useEffect(()=>{window.scrollTo({top:0,left:0,behavior:'instant'});},[pathname]);
+  useEffect(()=>{
+    function keyboard(event){
+      if(event.defaultPrevented||event.ctrlKey||event.altKey||event.metaKey||event.repeat)return;
+      if(event.target?.closest?.('input,textarea,select,[contenteditable="true"],[role="dialog"]'))return;
+      if(event.key.toLowerCase()==='n'&&online){event.preventDefault();openExpense();}
+      if(event.key==='/'){event.preventDefault();if(pathname!=='/history')navigate('/history',{state:{focusSearch:true}});else document.getElementById('transaction-search')?.focus();}
+    }
+    document.addEventListener('keydown',keyboard);
+    return ()=>document.removeEventListener('keydown',keyboard);
+  },[openExpense,navigate,online,pathname]);
   const displayProfile=data.profile?{...data.profile,profilePicture:avatarUrl||data.profile.profilePicture}:null;
   const context={...data,avatarUrl,refreshProfile,refreshAvatar,refreshTransactions,refreshStreak,refreshCategories,refreshAll,refreshAfterExpense,refreshNotifications,notify,openExpense};
   return <div className={`ep-app-shell ${collapsed?'ep-app-collapsed':''}`}>
@@ -80,7 +93,7 @@ export default function AppLayout(){
       <main className="ep-main" id="main-content">
         {loading?<div className="space-y-5" role="status"><div className="skeleton h-20 max-w-md"/><div className="grid gap-5 md:grid-cols-2"><div className="skeleton h-64"/><div className="skeleton h-64"/></div></div>
           :error&&!data.profile?<section className="panel mx-auto max-w-lg text-center"><h2 className="font-display text-2xl">Couldn't load your workspace</h2><p className="subtext">{error}</p><button className="btn-primary mt-6" onClick={()=>{setLoading(true);refreshAll().then(()=>setError('')).catch(e=>setError(e.message)).finally(()=>setLoading(false));}}>Try again</button></section>
-          :<Outlet context={context}/>}
+           :<Suspense fallback={<div className="v3-route-loading" role="status" aria-label="Loading page"><div className="skeleton h-10 w-48"/><div className="skeleton h-64 w-full"/></div>}><Outlet context={context}/></Suspense>}
       </main>
       <footer className="px-6 pb-8 text-center text-xs text-muted">ExpensePlus ✦ Track smarter. Spend wiser.</footer>
     </div>

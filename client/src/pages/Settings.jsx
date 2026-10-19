@@ -7,6 +7,7 @@ import {useAppData} from '../components/layout/AppLayout';
 import {api} from '../lib/api';
 import {InstallAppCard} from '../components/pwa/PWAProvider';
 import NotificationSettings from '../components/notifications/NotificationSettings';
+import PageHeader from '../components/ui/PageHeader';
 
 export default function Settings(){
   const {notify}=useAppData();
@@ -27,13 +28,13 @@ export default function Settings(){
     }catch(error){notify(error.message,'error');}
     finally{setSigningOut(false);}
   }
-  return <div className="space-y-6">
-    <div><p className="eyebrow">Make it yours</p><h1 className="page-heading">Settings <span className="text-sage">✦</span></h1><p className="subtext">Set the mood, stay informed, and manage your app experience.</p></div>
+  return <div className="v3-page v3-settings">
+    <PageHeader eyebrow="YOUR WORKSPACE" title="Settings" description="A few thoughtful ways to make this yours."/>
     <ThemeAppearance/>
-    <div className="grid gap-4 xl:grid-cols-12">
-      <div className="xl:col-span-7"><NotificationSettings notify={notify}/></div>
-      <div className="xl:col-span-5"><InstallAppCard/></div>
+    <div className="v3-settings-grid">
+      <div className="min-w-0"><NotificationSettings notify={notify}/></div>
+      <div className="min-w-0"><InstallAppCard/></div>
     </div>
-    <section className="panel flex flex-wrap items-start justify-between gap-5"><div><div className="flex items-center gap-2"><ShieldCheck size={20} className="text-sage"/><h2 className="font-display text-2xl">Account & security</h2></div><p className="subtext">Your financial records are protected with Google Sign-In and authenticated API requests.</p><p className="mt-3 text-xs text-muted">Signing out also disconnects push notifications on this device where supported.</p></div><button type="button" className="btn-outline !border-terracotta/60 !text-terracotta hover:!bg-terracotta/10" onClick={signOut} disabled={signingOut}><LogOut size={17}/>{signingOut?'Signing out…':'Sign out'}</button></section>
+    <section className="panel v3-settings-account flex flex-wrap items-start justify-between gap-5"><div><div className="flex items-center gap-2"><ShieldCheck size={20} className="text-sage"/><h2 className="font-display text-2xl">Account & security</h2></div><p className="subtext">Your financial records are protected with Google Sign-In and authenticated API requests.</p><p className="mt-3 text-xs text-muted">Signing out also disconnects push notifications on this device where supported.</p></div><button type="button" className="btn-outline !border-terracotta/60 !text-terracotta hover:!bg-terracotta/10" onClick={signOut} disabled={signingOut}><LogOut size={17}/>{signingOut?'Signing out…':'Sign out'}</button></section>
   </div>;
 }

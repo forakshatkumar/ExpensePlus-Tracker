@@ -12,7 +12,7 @@ export default defineConfig({
     manifest:{
       name:'ExpensePlus — Smart Expense Tracker',short_name:'ExpensePlus',
       description:'Track smarter. Spend wiser. Anywhere.',start_url:'/',scope:'/',
-      display:'standalone',background_color:'#1A1917',theme_color:'#1A1917',lang:'en-IN',
+      display:'standalone',background_color:'#121212',theme_color:'#121212',lang:'en-IN',
       categories:['finance','productivity'],
       icons:[
         {src:'/icons/icon-192.png',sizes:'192x192',type:'image/png'},

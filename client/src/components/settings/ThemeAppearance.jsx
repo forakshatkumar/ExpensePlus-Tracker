@@ -16,7 +16,7 @@ export default function ThemeAppearance(){
         <span className="ep-mode-switch-track" aria-hidden="true"><span className="ep-mode-switch-thumb"/></span>
       </button>
     </div>
-    <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3" role="radiogroup" aria-label="Select application theme">
+    <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" role="radiogroup" aria-label="Select application theme">
       {themeList.map(theme=>{
         const colors=theme.preview[mode];const selected=themeId===theme.id;
         return <label key={theme.id} className="ep-theme-swatch relative block cursor-pointer overflow-hidden p-3" data-selected={selected}>

@@ -1,41 +1,33 @@
-# ExpensePlus
+# ExpensePlus 3.0
 
 **Track smarter. Spend wiser.**
 
-ExpensePlus is a full-stack personal finance web app that helps you track expenses, manage budgets, and understand spending habits—all in one place. Built as an installable Progressive Web App (PWA), it works across desktop and mobile.
+A polished personal expense-tracking PWA built with React, Vite, Tailwind CSS, Express, and Firebase. ExpensePlus helps users understand spending, manage monthly budgets, and build better money habits.
 
-**[Live App](https://expense-plus-pi-gray.vercel.app)**
+[**Try ExpensePlus**](https://expense-plus-pi-gray.vercel.app)
 
-## Features
+### Highlights
 
-- Google sign-in and private, account-specific financial data
-- Expense tracking with categories and transaction history
-- Interactive dashboard and spending analytics
-- Monthly budgets and spending alerts
-- No-spend streaks, achievements, and financial highlights
-- Editable profile, appearance preferences, and PWA installation
-- Responsive interface with light and dark modes
+- Secure Google sign-in and individual user accounts
+- Expense history, search, filters, custom categories and CSV export
+- Monthly budgets, spending notifications and thoughtful analytics
+- No-spend streaks, milestones and editable user profiles
+- Four customizable visual themes, each with light and dark mode
+- Responsive desktop, tablet and mobile interface with PWA installation
 
-## Tech Stack
-
-**Frontend:** React, Vite, Tailwind CSS  
-**Backend:** Node.js, Express.js  
-**Authentication & Database:** Firebase Authentication, Cloud Firestore  
-**Deployment:** Vercel
-
-## Run Locally
+### Getting started
 
 ```bash
 npm install
-cp client/.env.example client/.env
-cp server/.env.example server/.env
 npm run dev
 ```
 
-Configure the Firebase environment variables in both `.env` files before starting. Never commit Firebase Admin credentials or other secrets.
+Configure your own local Firebase client and server environment variables as described in `client/.env.example` and `server/.env.example`. Never commit private credentials.
 
-## Author
+### Deployment
 
-Developed by **[Akshat Kumar](https://github.com/forakshatkumar)**.
+React frontend and Express API are deployed as separate Vercel projects. See [V3-DEPLOY-GUIDE.md](V3-DEPLOY-GUIDE.md) for setup, test and rollout instructions.
 
-_ExpensePlus is a personal portfolio project, publicly available for anyone to use._
+### Project
+
+Developed by [Akshat Kumar](https://github.com/forakshatkumar) as a personal portfolio application available for anyone to use.

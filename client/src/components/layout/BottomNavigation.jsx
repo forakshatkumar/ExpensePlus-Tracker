@@ -3,9 +3,9 @@ import {ChartNoAxesCombined,House,ListFilter,Menu,Target} from 'lucide-react';
 
 const primary=[
   {to:'/dashboard',label:'Home',Icon:House},
-  {to:'/history',label:'History',Icon:ListFilter},
-  {to:'/analytics',label:'Insights',Icon:ChartNoAxesCombined},
+  {to:'/history',label:'Activity',Icon:ListFilter},
   {to:'/budgets',label:'Budgets',Icon:Target},
+  {to:'/analytics',label:'Insights',Icon:ChartNoAxesCombined},
 ];
 export default function BottomNavigation({onMore,menuOpen=false,menuRef}){
   const {pathname}=useLocation();

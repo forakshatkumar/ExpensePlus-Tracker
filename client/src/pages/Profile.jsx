@@ -7,8 +7,9 @@ import {api} from '../lib/api';
 import {dateToday,inr} from '../lib/format';
 import {useOnlineStatus} from '../components/pwa/PWAProvider';
 import AvatarUploader from '../components/profile/AvatarUploader';
+import PageHeader from '../components/ui/PageHeader';
 
-const DEFAULT_BIO='B.Tech CSE student at ABES Engineering College | Building clean, mindful web experiences';
+const DEFAULT_BIO='';
 
 export default function Profile(){
   const {profile,avatarUrl,transactions,streak,refreshProfile,refreshAvatar,notify}=useAppData();
@@ -37,22 +38,19 @@ export default function Profile(){
     }catch(error){notify(error.message,'error');}
     finally{setSaving(false);}
   }
-  return <div className="space-y-6">
-    <div className="flex flex-wrap items-end justify-between gap-4">
-      <div><p className="eyebrow">A little more about you</p><h1 className="page-heading">Your profile <span className="text-sage">✦</span></h1><p className="subtext">Your details, your journey, and the highlights that matter.</p></div>
-      {!editing&&<button type="button" className="btn-primary" onClick={()=>setEditing(true)}><Edit3 size={17}/> Edit profile</button>}
-    </div>
-    <section className="panel relative overflow-hidden">
+  return <div className="v3-page v3-profile">
+    <PageHeader eyebrow="YOUR PERSONAL SPACE" title="Profile" description="Your details and the moments that matter." action={!editing&&<button type="button" className="btn-primary" onClick={()=>setEditing(true)}><Edit3 size={17}/> Edit profile</button>}/>
+    <section className="panel v3-profile-hero relative overflow-hidden">
       <div className="pointer-events-none absolute -right-20 -top-28 h-80 w-80 rounded-full bg-sage/10 blur-3xl"/>
       <div className="relative flex flex-wrap items-center gap-6">
         {pictureSrc?<img src={pictureSrc} className="h-28 w-28 rounded-[28px] border-2 border-sage/40 object-cover shadow-lg" alt={`${name}'s avatar`} referrerPolicy="no-referrer"/>:<div className="grid h-28 w-28 place-items-center rounded-[28px] bg-sage/15 text-sage"><UserRound size={43}/></div>}
         <div className="min-w-0 flex-1"><p className="eyebrow">ExpensePlus member</p><h2 className="mt-2 break-words font-display text-3xl sm:text-4xl">{name}</h2>
           <p className="mt-2 flex items-center gap-2 break-all text-sm text-muted"><Mail size={15} className="shrink-0"/>{profile?.email||user?.email||'Email unavailable'}</p>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-cream/80">{profile?.bio??DEFAULT_BIO}</p>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-cream/80">{profile?.bio || (editing ? '' : 'Your profile, your story. Add a short intro whenever you like.')}</p>
         </div>
       </div>
     </section>
-    {editing&&<section className="panel" id="profile-edit" aria-label="Edit profile">
+    {editing&&<section className="panel v3-profile-edit" id="profile-edit" aria-label="Edit profile">
       <div className="flex items-center justify-between gap-2"><h2 className="font-display text-2xl">Edit your details</h2><button type="button" aria-label="Cancel editing" onClick={cancel} className="icon-button"><X size={20}/></button></div>
       <p className="subtext">Change your name, bio, and profile picture. Settings are managed separately.</p>
       <form onSubmit={save} className="mt-5 space-y-5">
@@ -63,7 +61,7 @@ export default function Profile(){
         <div className="flex flex-wrap gap-3"><button type="submit" className="btn-primary" disabled={saving||!online}><Save size={17}/>{saving?'Saving…':'Save changes'}</button><button type="button" className="btn-outline" onClick={cancel} disabled={saving}>Cancel</button></div>
       </form>
     </section>}
-    <section className="panel"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow">Little wins add up</p><h2 className="mt-2 font-display text-2xl">Your highlights</h2></div><Link to="/analytics" className="inline-flex items-center gap-1 text-sm text-sage">View insights <ArrowUpRight size={16}/></Link></div>
+    <section className="panel v3-profile-highlights"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow">Little wins add up</p><h2 className="mt-2 font-display text-2xl">Your highlights</h2></div><Link to="/analytics" className="inline-flex items-center gap-1 text-sm text-sage">View insights <ArrowUpRight size={16}/></Link></div>
       <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">{highlights.map(([label,value])=><div key={label} className="rounded-2xl border border-line/70 bg-espresso p-4 sm:p-5"><p className="text-xs text-muted">{label}</p><p className="mt-3 break-words font-display text-xl sm:text-2xl">{value}</p></div>)}</div>
     </section>
     <section className="panel"><div className="flex items-center gap-2 text-sage"><ShieldCheck size={19}/><h2 className="font-display text-xl text-cream">Your account</h2></div>

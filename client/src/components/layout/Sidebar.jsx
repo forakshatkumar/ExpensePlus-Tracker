@@ -22,10 +22,10 @@ export default function Sidebar({collapsed,setCollapsed,profile,user}) {
       <NavLink to="/settings" title={collapsed?'Settings':undefined} aria-label={collapsed?'Settings':undefined} className={({isActive})=>`nav-item ${isActive?'nav-item-active':''} ${collapsed?'justify-center':''}`}>
         <Settings2 size={19} strokeWidth={1.8}/><span className={collapsed?'sr-only':''}>Settings</span>
       </NavLink>
-      <Link to="/profile" title={collapsed?'Profile':undefined} aria-label={collapsed?'Profile':undefined} className={`flex items-center rounded-2xl p-2.5 transition hover:bg-card-soft ${collapsed?'justify-center':'gap-3'}`}>
+      <NavLink to="/profile" title={collapsed?'Profile':undefined} aria-label={collapsed?'Profile':undefined} className={({isActive})=>`v3-sidebar-profile flex items-center rounded-2xl p-2.5 transition hover:bg-card-soft ${isActive?'v3-sidebar-profile-active':''} ${collapsed?'justify-center':'gap-3'}`}>
         <Avatar profile={profile} user={user}/>
         {!collapsed&&<div className="min-w-0"><p className="truncate text-sm font-semibold text-cream">{profile?.name||user?.displayName||'Member'}</p><p className="text-xs text-muted">View profile ↗</p></div>}
-      </Link>
+      </NavLink>
     </div>
   </aside>;
 }
