@@ -2,6 +2,7 @@ import {useLocation} from 'react-router-dom';
 import {Plus} from 'lucide-react';
 import {pageTitles} from './navigation';
 import NotificationBell from '../notifications/NotificationBell';
+import ThemeQuickSwitcher from './ThemeQuickSwitcher';
 export default function Topbar({onAdd,notifications=[],onRead,onReadAll}){
   const {pathname}=useLocation();
   return <header className="ep-topbar">
@@ -13,6 +14,7 @@ export default function Topbar({onAdd,notifications=[],onRead,onReadAll}){
       <div className="hidden md:block"><p className="text-[11px] uppercase tracking-[.19em] text-muted">Your money, in focus</p><h1 className="font-display text-[24px] font-semibold leading-7 tracking-tight text-cream">{pageTitles[pathname]||'ExpensePlus'}</h1></div>
     </div>
     <div className="flex items-center gap-2 sm:gap-3">
+      <ThemeQuickSwitcher/>
       <NotificationBell items={notifications} onRead={onRead} onReadAll={onReadAll}/>
       <button className="btn-primary !hidden !px-4 sm:!inline-flex" onClick={onAdd}><Plus size={17}/> Add expense</button>
     </div>

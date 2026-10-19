@@ -3,12 +3,23 @@
  * [data-theme="your-id"] selector in index.css to register a new preset.
  * The context persists the ID; individual components never own theme state.
  */
-export const DEFAULT_THEME = 'earthy-warm';
+export const DEFAULT_THEME = 'dayform-neon';
 export const DEFAULT_MODE = 'dark';
 export const THEME_STORAGE_KEY = 'expenseplus-theme-preset';
 export const MODE_STORAGE_KEY = 'expenseplus-theme-mode';
 
 export const themes = {
+  'dayform-neon': {
+    id: 'dayform-neon', name: 'Dayform Neon', description: 'Matte charcoal, electric lime and quiet confidence.',
+    preview: {
+      dark: {background:'#121212',surface:'#202020',foreground:'#F5F5F5',accent:'#C4F56D',secondary:'#A78BFA'},
+      light: {background:'#F8FAF7',surface:'#FFFFFF',foreground:'#171C1B',accent:'#4C7200',secondary:'#7451CE'},
+    },
+    chart: {
+      dark: {accent:'#C4F56D',secondary:'#A78BFA',tertiary:'#60A5FA',text:'#A9A9B1',grid:'rgba(204,204,213,.12)',surface:'#202020'},
+      light: {accent:'#4C7200',secondary:'#7451CE',tertiary:'#2563A9',text:'#65706C',grid:'rgba(55,68,62,.12)',surface:'#FFFFFF'},
+    },
+  },
   'earthy-warm': {
     id: 'earthy-warm', name: 'Earthy Warm', description: 'Calm, warm and editorial.',
     preview: {

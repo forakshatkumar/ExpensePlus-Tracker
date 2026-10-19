@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=DM+Sans:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 /* Runtime palette variables are mapped to Tailwind v4 tokens. */
 @theme {
@@ -26,6 +26,27 @@
   --nav-active-bg:rgba(163,190,156,.15);
   --ambient:none;
   --card-radius:22px;
+}
+/* Dayform Neon: compact graphite surfaces and considered lime highlights. */
+:root[data-theme="dayform-neon"][data-mode="dark"] {
+  --font-sans:"DM Sans",sans-serif;--font-display:"Outfit",sans-serif;--font-metrics:"Outfit",sans-serif;
+  --color-espresso:#121212;--color-card:#202020;--color-card-soft:#282828;
+  --color-cream:#F5F5F5;--color-muted:#A6A6B0;--color-line:#393939;
+  --color-sage:#C4F56D;--color-terracotta:#FB7185;--color-mustard:#A78BFA;
+  --panel-background:linear-gradient(145deg,#222225,#1b1b20);
+  --panel-shadow:0 14px 40px rgba(0,0,0,.16);--card-radius:24px;
+  --action-fg:#141B10;--nav-active-bg:rgba(196,245,109,.12);
+  --ambient:radial-gradient(ellipse at 96% 0%,rgba(167,139,250,.065),transparent 48%);
+}
+:root[data-theme="dayform-neon"][data-mode="light"] {
+  --font-sans:"DM Sans",sans-serif;--font-display:"Outfit",sans-serif;--font-metrics:"Outfit",sans-serif;
+  --color-espresso:#F8FAF7;--color-card:#FFFFFF;--color-card-soft:#EEF1EB;
+  --color-cream:#171C1B;--color-muted:#59645F;--color-line:#DCE5DB;
+  --color-sage:#4C7200;--color-terracotta:#BE3456;--color-mustard:#7451CE;
+  --panel-background:linear-gradient(145deg,#FFFFFF,#FBFCFA);
+  --panel-shadow:0 12px 34px rgba(21,39,25,.065);--card-radius:24px;
+  --action-bg:#C4F56D;--action-fg:#141B10;--nav-active-bg:rgba(81,119,0,.11);
+  --ambient:radial-gradient(ellipse at 96% 0%,rgba(167,139,250,.06),transparent 48%);
 }
 :root[data-theme="earthy-warm"][data-mode="dark"] {
   --font-display:"Fraunces",Georgia,serif;
@@ -194,3 +215,23 @@ html,body,#root{min-height:100%}html{scroll-padding-top:env(safe-area-inset-top)
  .ep-pwa-banner{bottom:calc(87px + env(safe-area-inset-bottom));}
  .ep-pwa-update{bottom:calc(95px + env(safe-area-inset-bottom));}
 }
+
+/* One-tap theme switching, visible on every page. */
+.ep-theme-trigger{display:inline-flex;align-items:center;justify-content:center;gap:2px;border:1px solid var(--color-line);border-radius:13px;background:var(--color-card);color:var(--color-sage);min-width:44px;}
+.ep-theme-trigger:hover,.ep-theme-trigger[aria-expanded="true"]{border-color:var(--color-sage);background:var(--color-card-soft);}
+.ep-theme-quick-menu{position:absolute;z-index:85;top:calc(100% + 12px);right:0;width:min(312px,calc(100vw - 24px));padding:17px;border:1px solid var(--color-line);border-radius:20px;background:var(--color-card);color:var(--color-cream);box-shadow:0 22px 58px rgba(0,0,0,.28);animation:pop-in .17s ease-out;}
+.ep-theme-option{display:flex;align-items:center;gap:11px;width:100%;min-height:47px;padding:6px 9px;border-radius:12px;color:var(--color-cream);transition:background .17s ease;}
+.ep-theme-option:hover,.ep-theme-option:focus-visible,.ep-theme-option[aria-pressed="true"]{background:var(--color-card-soft);}
+.ep-theme-color-preview{display:flex;align-items:flex-end;gap:5px;flex:0 0 37px;height:30px;padding:6px;border:1px solid;border-radius:8px;}
+.ep-theme-color-preview span:first-child{height:17px;flex:1;border-radius:3px;}
+.ep-theme-color-preview span:last-child{height:11px;flex:1;border-radius:3px;}
+.ep-theme-mode-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.ep-theme-mode-options{display:flex;align-items:center;gap:3px;padding:3px;border-radius:999px;background:var(--color-card-soft);}
+.ep-theme-mode-options button{display:flex;align-items:center;gap:5px;min-height:35px;padding:5px 11px;border-radius:999px;color:var(--color-muted);font-size:11px;font-weight:700;}
+.ep-theme-mode-options button[aria-pressed="true"]{background:var(--color-sage);color:var(--action-fg);}
+:root[data-theme="dayform-neon"] .ep-topbar{background:color-mix(in srgb,var(--color-espresso) 93%,transparent);}
+:root[data-theme="dayform-neon"] .panel{transition:border-color .2s ease,transform .2s ease,box-shadow .2s ease;}
+:root[data-theme="dayform-neon"] .stat-number{letter-spacing:-.055em;}
+:root[data-theme="dayform-neon"] .progress-track{height:10px;}
+:root[data-theme="dayform-neon"] .nav-item-active{border:1px solid color-mix(in srgb,var(--color-sage) 22%,transparent);}
+@media(max-width:767px){.ep-theme-quick-menu{position:fixed;top:78px;right:12px;}}
