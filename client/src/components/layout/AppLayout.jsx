@@ -15,20 +15,24 @@ import MobileDrawer from './MobileDrawer'
 import Topbar from './Topbar'
 import ExpenseModal from '../expenses/ExpenseModal'
 import Toast from '../ui/Toast'
+
 export function useAppData () {
   return useOutletContext()
 }
+
 const builtInCategories = Object.entries(categoryLabels).map(([id, name]) => ({
   id,
   name,
   emoji: categoryEmoji[id]
 }))
+
 const empty = {
   profile: null,
   transactions: [],
   streak: null,
   categories: builtInCategories
 }
+
 export default function AppLayout () {
   const { user } = useAuth()
   const online = useOnlineStatus()
@@ -36,7 +40,8 @@ export default function AppLayout () {
   const wasOnline = useRef(true)
   const [avatarUrl, setAvatarUrl] = useState('')
   const avatarRef = useRef('')
-  const { pathname } = useLocation()
+  const location = useLocation()
+  const { pathname, search } = location
   const navigate = useNavigate()
   const [data, setData] = useState(empty)
   const [loading, setLoading] = useState(true)
@@ -57,10 +62,12 @@ export default function AppLayout () {
   const [expense, setExpense] = useState(null) // null = closed, {edit:null|transaction} = open
   const menuRef = useRef(null)
   const previousFocusRef = useRef(null)
+
   const notify = useCallback(
     (message, kind = 'success') => setToast({ message, kind, timestamp: Date.now() }),
     []
   )
+
   const closeDrawer = useCallback(() => setDrawerOpen(false), [])
   const closeExpense = useCallback(() => {
     setExpense(null)
@@ -74,21 +81,25 @@ export default function AppLayout () {
     },
     [closeDrawer]
   )
+
   const refreshProfile = useCallback(async () => {
     const r = await api('/api/user/profile')
     setData(prev => ({ ...prev, profile: r.profile }))
     return r.profile
   }, [])
+
   const refreshTransactions = useCallback(async () => {
     const r = await api('/api/transactions')
     setData(prev => ({ ...prev, transactions: r.transactions }))
     return r.transactions
   }, [])
+
   const refreshStreak = useCallback(async () => {
     const r = await api('/api/streaks')
     setData(prev => ({ ...prev, streak: r }))
     return r
   }, [])
+
   const refreshCategories = useCallback(async () => {
     const r = await api('/api/categories')
     setData(prev => ({
@@ -97,11 +108,13 @@ export default function AppLayout () {
     }))
     return r.categories || builtInCategories
   }, [])
+
   const refreshNotifications = useCallback(async () => {
     const r = await api('/api/notifications')
     setNotifications(r.notifications || [])
     return r.notifications
   }, [])
+
   const markNotificationRead = useCallback(
     async id => {
       try {
@@ -113,6 +126,7 @@ export default function AppLayout () {
     },
     [refreshNotifications, notify]
   )
+
   const markNotificationsRead = useCallback(async () => {
     try {
       await api('/api/notifications/read-all', { method: 'POST' })
@@ -121,6 +135,7 @@ export default function AppLayout () {
       notify(e.message, 'error')
     }
   }, [refreshNotifications, notify])
+
   const refreshAvatar = useCallback(async () => {
     const blob = await apiBinary('/api/user/avatar').catch(error => {
       if (!/No custom avatar|404/.test(error.message))
@@ -132,18 +147,21 @@ export default function AppLayout () {
     avatarRef.current = url
     setAvatarUrl(url)
   }, [])
+
   useEffect(
     () => () => {
       if (avatarRef.current) URL.revokeObjectURL(avatarRef.current)
     },
     []
   )
+
   useEffect(() => {
     if (avatarRef.current) URL.revokeObjectURL(avatarRef.current)
     avatarRef.current = ''
     setAvatarUrl('')
     setNotifications([])
   }, [user?.uid])
+
   useEffect(() => {
     if (data.profile?.hasCustomAvatar) refreshAvatar()
     else {
@@ -152,18 +170,21 @@ export default function AppLayout () {
       setAvatarUrl('')
     }
   }, [data.profile?.hasCustomAvatar, refreshAvatar, user?.uid])
+
   useEffect(() => {
     if (data.profile && online)
       refreshNotifications().catch(error =>
         console.warn('Notifications:', error.message)
       )
   }, [data.profile?.createdAt, online, refreshNotifications])
+
   useEffect(() => {
     if (online && !wasOnline.current) {
       refreshAll().catch(error => notify(error.message, 'error'))
     }
     wasOnline.current = online
   }, [online])
+
   const refreshAll = useCallback(async () => {
     const [p, t, s, c] = await Promise.all([
       api('/api/user/profile'),
@@ -182,6 +203,7 @@ export default function AppLayout () {
       categories: c.categories || builtInCategories
     })
   }, [])
+
   const refreshAfterExpense = useCallback(
     () =>
       Promise.all([
@@ -197,6 +219,7 @@ export default function AppLayout () {
       refreshNotifications
     ]
   )
+
   useEffect(() => {
     let active = true
     setLoading(true)
@@ -214,18 +237,22 @@ export default function AppLayout () {
       active = false
     }
   }, [refreshAll, user?.uid])
+
   useEffect(() => {
     try {
       localStorage.setItem('expenseplus-sidebar-collapsed', String(collapsed))
     } catch {}
   }, [collapsed])
+
   useEffect(() => {
     closeDrawer()
   }, [pathname, closeDrawer])
-  // Keep route changes anchored at the top, and provide a lightweight power-user shortcut.
+
+  // Keep route and view changes anchored at the top, and provide a lightweight power-user shortcut.
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
-  }, [pathname])
+  }, [pathname, search])
+
   useEffect(() => {
     function keyboard (event) {
       if (
@@ -256,12 +283,14 @@ export default function AppLayout () {
     document.addEventListener('keydown', keyboard)
     return () => document.removeEventListener('keydown', keyboard)
   }, [openExpense, navigate, online, pathname])
+
   const displayProfile = data.profile
     ? {
         ...data.profile,
         profilePicture: avatarUrl || data.profile.profilePicture
       }
     : null
+
   const context = {
     ...data,
     avatarUrl,
@@ -276,6 +305,12 @@ export default function AppLayout () {
     notify,
     openExpense
   }
+
+  // Generate unique key for page transition so that subviews (like ?view=past or ?view=history)
+  // trigger the smooth transition without losing parent state
+  const viewParam = new URLSearchParams(search).get('view') || ''
+  const transitionKey = `${pathname}:${viewParam}`
+
   return (
     <div className={`ep-app-shell ${collapsed ? 'ep-app-collapsed' : ''}`}>
       <Sidebar
@@ -339,7 +374,9 @@ export default function AppLayout () {
                 </div>
               }
             >
-              <Outlet context={context} />
+              <div key={transitionKey} className='ep-page-transition'>
+                <Outlet context={context} />
+              </div>
             </Suspense>
           )}
         </main>
@@ -364,8 +401,8 @@ export default function AppLayout () {
           <Plus size={19} />
         </button>
         <button
-          ref={menuRef}
           type='button'
+          ref={menuRef}
           className='v31-mobile-more'
           onClick={() => setDrawerOpen(true)}
           aria-expanded={drawerOpen}

@@ -935,3 +935,443 @@ button.v31-settings-row:hover {
   background: color-mix(in srgb, var(--color-terracotta) 18%, transparent);
   color: var(--color-terracotta);
 }
+
+
+/* ==========================================================================
+   ExpensePlus 3.3 — UX Enhancements, Dedicated History Pages & Polish
+   ========================================================================== */
+
+/* 1. Page Transitions */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.ep-page-transition {
+  animation: page-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  width: 100%;
+}
+
+/* 2. Monthly Category Breakdown */
+.v3-month-breakdown-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--v3-hairline);
+  background: var(--v3-subtle);
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.18s ease;
+  cursor: pointer;
+}
+.v3-month-breakdown-btn:hover,
+.v3-month-breakdown-btn[aria-expanded="true"] {
+  border-color: var(--color-sage);
+  color: var(--color-cream);
+  background: color-mix(in srgb, var(--color-sage) 10%, var(--color-card));
+}
+.v3-month-breakdown-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px 14px;
+  background: var(--v3-subtle);
+  border: 1px solid var(--v3-hairline);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  animation: page-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.v3-month-breakdown-bar {
+  display: flex;
+  height: 6px;
+  width: 100%;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-cream) 8%, var(--color-card));
+  gap: 1px;
+}
+.v3-month-breakdown-segment {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.v3-month-breakdown-segment:nth-child(1) { background: var(--color-sage); }
+.v3-month-breakdown-segment:nth-child(2) { background: var(--color-terracotta); }
+.v3-month-breakdown-segment:nth-child(3) { background: var(--color-mustard); }
+.v3-month-breakdown-segment:nth-child(4) { background: #A78BFA; }
+.v3-month-breakdown-segment:nth-child(5) { background: #60A5FA; }
+.v3-month-breakdown-segment:nth-child(n+6) { background: var(--color-muted); }
+
+.v3-month-breakdown-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.v3-breakdown-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--v3-hairline);
+  background: var(--color-card);
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.v3-breakdown-emoji {
+  font-size: 13px;
+}
+.v3-breakdown-name {
+  color: var(--color-cream);
+  font-weight: 600;
+}
+.v3-breakdown-amount {
+  color: var(--color-sage);
+  font-family: var(--v3-font-numbers);
+  font-variant-numeric: tabular-nums;
+}
+.v3-breakdown-percent {
+  font-size: 10px;
+  opacity: 0.75;
+}
+
+/* 3. Dedicated Past Transactions & Savings History Stats Strip */
+.v3-past-stats-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 20px 24px;
+  margin-bottom: 4px;
+}
+.v3-past-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+.v3-past-stat-value {
+  font-family: var(--v3-font-numbers);
+  font-size: clamp(22px, 2.8vw, 32px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--color-cream);
+  font-variant-numeric: tabular-nums;
+}
+.v3-past-stat-meta {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.v3-past-stat-divider {
+  width: 1px;
+  height: 44px;
+  background: var(--v3-hairline);
+}
+@media (max-width: 640px) {
+  .v3-past-stats-strip {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .v3-past-stat-divider {
+    display: none;
+  }
+}
+
+/* 4. Past Transactions Banner on Main View */
+.v3-past-transactions-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px;
+  margin-top: 24px;
+  border-radius: var(--v3-radius-small);
+  border: 1px solid var(--v3-hairline);
+  background: color-mix(in srgb, var(--color-sage) 5%, var(--v3-subtle));
+}
+.v3-past-banner-copy h3 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-cream);
+  margin: 4px 0 6px;
+}
+.v3-past-banner-copy p {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-muted);
+  max-width: 58ch;
+  margin: 0;
+}
+.v3-past-banner-btn {
+  white-space: nowrap;
+  flex: none;
+}
+@media (max-width: 768px) {
+  .v3-past-transactions-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .v3-past-banner-btn {
+    width: 100%;
+  }
+}
+
+.v3-past-footer-nav {
+  display: flex;
+  justify-content: center;
+  padding-top: 20px;
+  margin-top: 14px;
+  border-top: 1px solid var(--v3-hairline);
+}
+
+/* 5. Analytics UI Enhancements */
+.v3-analytics-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+@media (max-width: 1024px) {
+  .v3-analytics-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .v3-analytics-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.v3-chart-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.v3-range-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--v3-hairline);
+  background: var(--v3-subtle);
+}
+.v3-range-pill {
+  border: 0;
+  background: transparent;
+  padding: 6px 13px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-muted);
+  transition: all 0.18s ease;
+  cursor: pointer;
+}
+.v3-range-pill:hover {
+  color: var(--color-cream);
+}
+.v3-range-pill.v3-range-active {
+  background: var(--color-sage);
+  color: var(--action-fg);
+}
+
+.v3-alltime-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+.v3-alltime-badge strong {
+  font-family: var(--v3-font-numbers);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-secondary, var(--color-cream));
+  letter-spacing: -0.03em;
+}
+
+.v3-insights-callout {
+  padding: 22px 24px;
+}
+.v3-insights-facts-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.v3-fact-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--v3-hairline);
+  background: var(--v3-subtle);
+}
+.v3-fact-label {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.v3-fact-card strong {
+  font-family: var(--v3-font-numbers);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-cream);
+  letter-spacing: -0.02em;
+}
+.v3-fact-caption {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+@media (max-width: 1024px) {
+  .v3-insights-facts-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .v3-insights-facts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 6. Notifications Toast Animations & Progress Indicator */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.96);
+  }
+}
+
+.toast {
+  position: fixed;
+  z-index: 120;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: min(94vw, 480px);
+  padding: 12px 16px 14px;
+  border-radius: 16px;
+  background: var(--color-card);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--v3-hairline);
+  color: var(--color-cream);
+  overflow: hidden;
+}
+.toast-entering {
+  animation: toast-in 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.toast-exiting {
+  animation: toast-out 0.22s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.toast-success {
+  border: 1px solid var(--color-sage);
+  background: color-mix(in srgb, var(--color-card) 94%, var(--color-sage) 6%);
+}
+.toast-error {
+  border: 1px solid var(--color-terracotta);
+  background: color-mix(in srgb, var(--color-card) 92%, var(--color-terracotta) 8%);
+}
+.toast-warning {
+  border: 1px solid var(--color-mustard);
+  background: color-mix(in srgb, var(--color-card) 93%, var(--color-mustard) 7%);
+}
+.toast-info {
+  border: 1px solid color-mix(in srgb, var(--color-cream) 22%, var(--color-line));
+  background: var(--color-card);
+}
+
+.toast-icon-wrap {
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.toast-close-btn {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 8px !important;
+  opacity: 0.65;
+  transition: opacity 0.16s, background-color 0.16s;
+  flex: none;
+}
+.toast-close-btn:hover {
+  opacity: 1;
+}
+
+.toast-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.toast-progress-fill {
+  height: 100%;
+  border-radius: 0 2px 2px 0;
+  transition: width 0.06s linear;
+}
+.toast-progress-success {
+  background: var(--color-sage);
+}
+.toast-progress-error {
+  background: var(--color-terracotta);
+}
+.toast-progress-warning {
+  background: var(--color-mustard);
+}
+.toast-progress-info {
+  background: var(--color-muted);
+}
+
+@media (max-width: 767px) {
+  .toast {
+    bottom: calc(90px + env(safe-area-inset-bottom));
+    max-width: min(92vw, 420px);
+  }
+}
+
+/* 7. Reduced motion overrides */
+@media (prefers-reduced-motion: reduce) {
+  .ep-page-transition,
+  .toast-entering,
+  .toast-exiting,
+  .v3-month-breakdown-panel {
+    animation: none !important;
+  }
+  .toast-progress-fill,
+  .v3-month-breakdown-segment {
+    transition: none !important;
+  }
+}

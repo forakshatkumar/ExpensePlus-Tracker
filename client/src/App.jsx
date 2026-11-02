@@ -3,6 +3,7 @@ import { lazy } from 'react'
 import { useAuth } from './context/AuthContext'
 import AppLayout from './components/layout/AppLayout'
 import Login from './pages/Login'
+
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const History = lazy(() => import('./pages/History'))
 const Analytics = lazy(() => import('./pages/Analytics'))
@@ -28,6 +29,7 @@ function RequireAuth () {
     return <Navigate to='/login' state={{ from: location.pathname }} replace />
   return <AppLayout key={user.uid} />
 }
+
 export default function App () {
   return (
     <Routes>
@@ -36,12 +38,14 @@ export default function App () {
         <Route index element={<Navigate to='/dashboard' replace />} />
         <Route path='/dashboard' element={<Dashboard />} />
         <Route path='/history' element={<History />} />
+        <Route path='/history/past' element={<History isDedicatedPastView={true} />} />
         <Route path='/analytics' element={<Analytics />} />
         <Route path='/budgets' element={<Budgets />} />
         <Route path='/streaks' element={<Streaks />} />
         <Route path='/profile' element={<Profile />} />
         <Route path='/settings' element={<Settings />} />
         <Route path='/savings' element={<Savings />} />
+        <Route path='/savings/history' element={<Savings isDedicatedHistoryView={true} />} />
       </Route>
       <Route path='*' element={<Navigate to='/dashboard' replace />} />
     </Routes>
