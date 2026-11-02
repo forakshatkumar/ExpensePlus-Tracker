@@ -58,7 +58,7 @@ export default function AppLayout () {
   const menuRef = useRef(null)
   const previousFocusRef = useRef(null)
   const notify = useCallback(
-    (message, kind = 'success') => setToast({ message, kind }),
+    (message, kind = 'success') => setToast({ message, kind, timestamp: Date.now() }),
     []
   )
   const closeDrawer = useCallback(() => setDrawerOpen(false), [])

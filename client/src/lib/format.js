@@ -15,3 +15,14 @@ export const getCategoryName = (id, categories = []) =>
 
 export const getCategoryEmoji = (id, categories = []) =>
   categories.find(category => category.id === id)?.emoji || categoryEmoji[id] || '✨';
+
+export const formatMonthYear = (key) => {
+  if (!key || typeof key !== 'string') return '';
+  const cleanKey = key.slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(cleanKey)) return key;
+  return new Date(`${cleanKey}-01T12:00:00Z`).toLocaleDateString('en-IN', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC'
+  });
+};

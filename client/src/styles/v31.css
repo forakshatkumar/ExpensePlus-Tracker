@@ -749,3 +749,189 @@ button.v31-settings-row:hover {
     transition: none !important;
   }
 }
+
+
+/* ==========================================================================
+   ExpensePlus 3.2 — UX Refinements & Monthly Financial Views Styles
+   ========================================================================== */
+
+/* Monthly-grouped transactions log */
+.v3-history-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.v3-history-month-group {
+  display: flex;
+  flex-direction: column;
+}
+.v3-history-month-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--color-card-soft);
+  border: 1px solid var(--v3-hairline);
+  border-radius: 14px;
+  margin-bottom: 8px;
+}
+.v3-history-month-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.v3-history-month-bullet {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-sage);
+  flex: none;
+}
+.v3-history-month-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-cream);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.v3-history-month-count {
+  font-size: 11px;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+.v3-history-month-sum {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: none;
+}
+.v3-history-month-sum-label {
+  font-size: 11px;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.v3-history-month-sum strong {
+  font-family: var(--v3-font-numbers);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-sage);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Savings goals compact and dedicated view */
+.v31-view-more-goals {
+  width: 100%;
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 12px;
+}
+.v31-goal-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.v31-goal-remaining strong {
+  color: var(--color-cream);
+  font-family: var(--v3-font-numbers);
+}
+.v31-dedicated-goals-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.v31-all-goals-hero {
+  padding: 20px 24px;
+}
+@media (max-width: 1024px) {
+  .v31-dedicated-goals-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .v31-dedicated-goals-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Monthly-wise savings history */
+.v31-history-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--color-card-soft);
+  border: 1px solid var(--color-line);
+  border-radius: 13px;
+  margin-bottom: 8px;
+}
+.v31-history-group-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.v31-history-bullet {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-sage);
+  flex: none;
+}
+.v31-history-group-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-cream);
+}
+.v31-history-month-totals {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+}
+.v31-total-deposit {
+  font-weight: 600;
+}
+.v31-total-withdrawal {
+  font-weight: 600;
+}
+.v31-total-net {
+  color: var(--color-muted);
+}
+.v31-total-net strong {
+  color: var(--color-cream);
+  font-family: var(--v3-font-numbers);
+}
+.v31-entry-type-tag {
+  display: inline-block;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 6px;
+  flex: none;
+}
+.v31-entry-type-tag.tag-deposit {
+  background: color-mix(in srgb, var(--color-sage) 18%, transparent);
+  color: var(--color-sage);
+}
+.v31-entry-type-tag.tag-withdrawal {
+  background: color-mix(in srgb, var(--color-terracotta) 18%, transparent);
+  color: var(--color-terracotta);
+}
