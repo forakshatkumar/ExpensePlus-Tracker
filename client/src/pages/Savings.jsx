@@ -11,12 +11,9 @@ import {
   History as HistoryIcon,
   Minus,
   Plus,
-  Search,
-  SlidersHorizontal,
   Target,
   Trash2,
   Wallet,
-  X,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { dateToday, formatMonthYear, inr } from '../lib/format';
@@ -122,6 +119,43 @@ function GoalCard({ goal, free, online, onAllocate, onRelease, onEdit, onArchive
   );
 }
 
+// ─── Savings entry row ────────────────────────────────────────────────────────
+
+function SavingsEntryRow({ entry }) {
+  const isDeposit = entry.type === 'deposit';
+  return (
+    <div className="v31-saving-entry">
+      <span className={`v31-saving-entry-icon ${isDeposit ? 'is-deposit' : 'is-withdrawal'}`}>
+        {isDeposit ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <strong className="truncate">
+            {entry.note || (isDeposit ? 'Savings added' : 'Savings withdrawn')}
+          </strong>
+          <span className={`v31-entry-type-tag ${isDeposit ? 'tag-deposit' : 'tag-withdrawal'}`}>
+            {isDeposit ? 'Deposit' : 'Withdrawal'}
+          </span>
+        </div>
+        <span className="text-xs text-muted">
+          {new Date(`${entry.effectiveDate}T12:00:00Z`).toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            timeZone: 'UTC',
+          })}
+        </span>
+      </div>
+      <strong className={`font-mono ${isDeposit ? 'text-sage' : 'text-terracotta'}`}>
+        {isDeposit ? '+' : '−'}
+        {money(entry.amountMinor)}
+      </strong>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 export default function Savings({ isDedicatedHistoryView = false }) {
   const { notify } = useAppData();
   const online = useOnlineStatus();
@@ -134,18 +168,14 @@ export default function Savings({ isDedicatedHistoryView = false }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  // Local view states
+  // View states
   const [viewAllGoals, setViewAllGoals] = useState(false);
-  const viewAllHistory =
-    isDedicatedHistoryView ||
-    searchParams.get('view') === 'history' ||
-    searchParams.get('view') === 'all';
 
-  // Filters for Dedicated Savings History View
-  const [historySearch, setHistorySearch] = useState('');
-  const [historyMonth, setHistoryMonth] = useState('');
-  const [historyType, setHistoryType] = useState('all'); // 'all' | 'deposit' | 'withdrawal'
-  const [historyFiltersOpen, setHistoryFiltersOpen] = useState(false);
+  // Search-param driven savings history navigation
+  const view = searchParams.get('view'); // null | 'history'
+  const selectedMonth = searchParams.get('month'); // null | 'YYYY-MM'
+  const viewAllHistory =
+    isDedicatedHistoryView || view === 'history' || view === 'all';
 
   // Form states for modals
   const [amount, setAmount] = useState('');
@@ -186,42 +216,25 @@ export default function Savings({ isDedicatedHistoryView = false }) {
 
   const free = Math.max(0, data.summary.balanceMinor - data.summary.allocatedMinor);
 
-  // All distinct recorded months in savings entries
-  const distinctSavingsMonths = useMemo(() => {
-    const set = new Set();
-    for (const e of data.entries) {
-      if (e.effectiveDate && e.effectiveDate.length >= 7) {
-        set.add(e.effectiveDate.slice(0, 7));
-      }
-    }
-    return Array.from(set).sort((a, b) => b.localeCompare(a));
-  }, [data.entries]);
+  // Current month key
+  const currentMonthKey = dateToday().slice(0, 7);
 
-  // Filtered savings entries for dedicated view
-  const filteredHistoryEntries = useMemo(() => {
-    return data.entries.filter(e => {
-      if (historyType !== 'all' && e.type !== historyType) return false;
-      if (historyMonth && !e.effectiveDate?.startsWith(historyMonth)) return false;
-      if (historySearch.trim()) {
-        const q = historySearch.trim().toLowerCase();
-        const noteText = (e.note || '').toLowerCase();
-        const amountText = (e.amountMinor / 100).toFixed(2);
-        if (!noteText.includes(q) && !amountText.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [data.entries, historyType, historyMonth, historySearch]);
+  // Helper: sort entries newest-first
+  const sortEntriesNewest = useCallback(entries =>
+    [...entries].sort(
+      (a, b) =>
+        (b.effectiveDate || '').localeCompare(a.effectiveDate || '') ||
+        (b.createdAt || '').localeCompare(a.createdAt || '')
+    ), []);
 
-  // Group savings history entries by effectiveDate month (YYYY-MM), newest month first
+  // Helper: group entries by month
   const groupEntriesByMonth = useCallback(entries => {
     const map = new Map();
     for (const entry of entries) {
-      const dateStr = entry.effectiveDate || '';
-      const key = dateStr.length >= 7 ? dateStr.slice(0, 7) : 'other';
+      const key = entry.effectiveDate?.length >= 7 ? entry.effectiveDate.slice(0, 7) : 'other';
       if (!map.has(key)) {
         map.set(key, {
           key,
-          title: key !== 'other' ? monthTitle(key) : 'Other dates',
           entries: [],
           depositedMinor: 0,
           withdrawnMinor: 0,
@@ -231,78 +244,42 @@ export default function Savings({ isDedicatedHistoryView = false }) {
       const g = map.get(key);
       g.entries.push(entry);
       g.activitiesCount += 1;
-      if (entry.type === 'deposit') {
-        g.depositedMinor += (entry.amountMinor || 0);
-      } else if (entry.type === 'withdrawal') {
-        g.withdrawnMinor += (entry.amountMinor || 0);
-      }
+      if (entry.type === 'deposit') g.depositedMinor += entry.amountMinor || 0;
+      else if (entry.type === 'withdrawal') g.withdrawnMinor += entry.amountMinor || 0;
     }
-
-    // Sort months newest first
     const sorted = Array.from(map.values()).sort((a, b) => {
       if (a.key === 'other') return 1;
       if (b.key === 'other') return -1;
       return b.key.localeCompare(a.key);
     });
-
-    // Sort entries within each month newest first
     for (const g of sorted) {
-      g.entries.sort(
-        (a, b) =>
-          (b.effectiveDate || '').localeCompare(a.effectiveDate || '') ||
-          (b.createdAt || '').localeCompare(a.createdAt || '')
-      );
+      g.entries = sortEntriesNewest(g.entries);
     }
-
     return sorted;
-  }, []);
+  }, [sortEntriesNewest]);
 
-  const allGroupedSavingsMonths = useMemo(
-    () => groupEntriesByMonth(data.entries),
-    [data.entries, groupEntriesByMonth]
+  // Current-month entries
+  const currentMonthEntries = useMemo(
+    () => sortEntriesNewest(data.entries.filter(e => e.effectiveDate?.startsWith(currentMonthKey))),
+    [data.entries, currentMonthKey, sortEntriesNewest]
   );
+  const currentMonthDeposited = currentMonthEntries
+    .filter(e => e.type === 'deposit')
+    .reduce((s, e) => s + (e.amountMinor || 0), 0);
+  const currentMonthWithdrawn = currentMonthEntries
+    .filter(e => e.type === 'withdrawal')
+    .reduce((s, e) => s + (e.amountMinor || 0), 0);
+  const currentMonthNet = currentMonthDeposited - currentMonthWithdrawn;
 
-  const filteredGroupedSavingsMonths = useMemo(
-    () => groupEntriesByMonth(filteredHistoryEntries),
-    [filteredHistoryEntries, groupEntriesByMonth]
-  );
+  // Historical entries (past months only)
+  const historicalGroups = useMemo(() => {
+    const hist = data.entries.filter(
+      e => e.effectiveDate && e.effectiveDate.slice(0, 7) !== currentMonthKey
+    );
+    return groupEntriesByMonth(hist);
+  }, [data.entries, currentMonthKey, groupEntriesByMonth]);
 
-  // Overall totals for history
-  const historySummary = useMemo(() => {
-    let deposits = 0;
-    let withdrawals = 0;
-    for (const e of filteredHistoryEntries) {
-      if (e.type === 'deposit') deposits += e.amountMinor || 0;
-      else if (e.type === 'withdrawal') withdrawals += e.amountMinor || 0;
-    }
-    return {
-      deposits,
-      withdrawals,
-      net: deposits - withdrawals,
-      count: filteredHistoryEntries.length,
-    };
-  }, [filteredHistoryEntries]);
-
-  const openHistoryView = () => {
-    setSearchParams({ view: 'history' });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const closeHistoryView = () => {
-    setSearchParams({});
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const resetHistoryFilters = () => {
-    setHistorySearch('');
-    setHistoryMonth('');
-    setHistoryType('all');
-  };
-
-  const hasActiveHistoryFilters = Boolean(
-    historySearch || historyMonth || historyType !== 'all'
-  );
-
+  // ── Modal handlers ──────────────────────────────────────────────────────────
   function show(type, goal = null) {
     setDialog({ type, goal });
     setAmount('');
@@ -394,9 +371,160 @@ export default function Savings({ isDedicatedHistoryView = false }) {
     }
   }
 
+  // Shared modal overlay (used in all views)
   const type = dialog?.type;
   const editingGoal = dialog?.goal;
 
+  const modalOverlay = (
+    <Overlay
+      title={
+        type === 'deposit'
+          ? 'Add savings'
+          : type === 'withdrawal'
+          ? 'Withdraw savings'
+          : type === 'goal'
+          ? 'New savings goal'
+          : type === 'edit-goal'
+          ? 'Edit savings goal'
+          : type === 'allocate'
+          ? 'Allocate savings'
+          : type === 'release'
+          ? 'Release allocation'
+          : 'Archive goal'
+      }
+      open={Boolean(dialog)}
+      onClose={close}
+      compact
+    >
+      <form onSubmit={run} className="v31-savings-form">
+        {['deposit', 'withdrawal'].includes(type) && (
+          <>
+            <label>
+              Amount (₹)
+              <input
+                className="field"
+                autoFocus
+                inputMode="decimal"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                placeholder="0.00"
+                required
+              />
+            </label>
+            <label>
+              Date
+              <input
+                className="field"
+                type="date"
+                max={dateToday()}
+                value={date}
+                onChange={e => setDate(e.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Note (optional)
+              <input
+                className="field"
+                value={note}
+                maxLength={240}
+                onChange={e => setNote(e.target.value)}
+                placeholder="e.g. October savings"
+              />
+            </label>
+            {type === 'withdrawal' && (
+              <p className="text-xs text-muted">Available to withdraw: {money(free)}</p>
+            )}
+          </>
+        )}
+        {['goal', 'edit-goal'].includes(type) && (
+          <>
+            <label>
+              Goal name
+              <input
+                className="field"
+                autoFocus
+                value={goalName}
+                maxLength={70}
+                onChange={e => setGoalName(e.target.value)}
+                placeholder="e.g. Mountain vacation"
+                required
+              />
+            </label>
+            <label>
+              Target amount (₹)
+              <input
+                className="field"
+                value={goalTarget}
+                inputMode="decimal"
+                onChange={e => setGoalTarget(e.target.value)}
+                placeholder="10000"
+                required
+              />
+            </label>
+            <label>
+              Target date (optional)
+              <input
+                className="field"
+                type="date"
+                value={targetDate}
+                onChange={e => setTargetDate(e.target.value)}
+              />
+            </label>
+          </>
+        )}
+        {['allocate', 'release'].includes(type) && (
+          <>
+            <p className="text-sm text-muted">
+              {type === 'allocate'
+                ? `Available: ${money(free)}.`
+                : `Allocated to ${editingGoal?.name}: ${money(editingGoal?.allocatedMinor || 0)}.`}
+            </p>
+            <label>
+              Amount (₹)
+              <input
+                className="field"
+                autoFocus
+                inputMode="decimal"
+                value={goalAmount}
+                onChange={e => setGoalAmount(e.target.value)}
+                required
+              />
+            </label>
+          </>
+        )}
+        {type === 'archive' && (
+          <p className="text-sm text-muted">
+            Archive "{editingGoal?.name}"? Any allocated savings will become available again.
+            Your deposit history will stay intact.
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="v31-form-error">
+            {error}
+          </p>
+        )}
+        <div className="v31-form-actions">
+          <button type="button" className="btn-outline" onClick={close} disabled={busy}>
+            Cancel
+          </button>
+          <button type="submit" className="btn-primary" disabled={busy || !online}>
+            {busy
+              ? 'Saving…'
+              : type === 'archive'
+              ? 'Archive goal'
+              : type === 'withdrawal'
+              ? 'Record withdrawal'
+              : type === 'deposit'
+              ? 'Add savings'
+              : 'Save'}
+          </button>
+        </div>
+      </form>
+    </Overlay>
+  );
+
+  // ── Loading / error ─────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="v3-page v31-savings">
@@ -435,23 +563,118 @@ export default function Savings({ isDedicatedHistoryView = false }) {
     );
   }
 
-  // =========================================================================
-  // VIEW 1: DEDICATED FULL-PAGE SAVINGS HISTORY VIEW
-  // Accessible ONLY through "View All Savings History" button
-  // =========================================================================
+  // ═══════════════════════════════════════════════════════════════════════════
+  // VIEW C: Individual month savings detail
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (viewAllHistory && selectedMonth) {
+    const group = historicalGroups.find(g => g.key === selectedMonth);
+    const monthLabel = formatMonthYear(selectedMonth);
+    const netMinor = group ? group.depositedMinor - group.withdrawnMinor : 0;
+
+    return (
+      <div className="v3-page v31-savings v31-savings-all-history">
+        <PageHeader
+          eyebrow="SAVINGS HISTORY"
+          title={monthLabel}
+          description={`All savings activities recorded in ${monthLabel}.`}
+          action={
+            <button
+              type="button"
+              className="btn-outline flex items-center gap-2"
+              onClick={() => {
+                setSearchParams({ view: 'history' });
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            >
+              <ArrowLeft size={16} /> Back to Overview
+            </button>
+          }
+        />
+
+        {/* Month stats */}
+        {group && (
+          <section className="v3-past-stats-strip panel" aria-label={`${monthLabel} savings summary`}>
+            <div className="v3-past-stat">
+              <span className="v3-overline">Deposited</span>
+              <strong className="v3-past-stat-value text-sage">+{money(group.depositedMinor)}</strong>
+              <span className="v3-past-stat-meta">Money added</span>
+            </div>
+            <div className="v3-past-stat-divider" aria-hidden="true" />
+            <div className="v3-past-stat">
+              <span className="v3-overline">Withdrawn</span>
+              <strong className="v3-past-stat-value text-terracotta">−{money(group.withdrawnMinor)}</strong>
+              <span className="v3-past-stat-meta">Money taken out</span>
+            </div>
+            <div className="v3-past-stat-divider" aria-hidden="true" />
+            <div className="v3-past-stat">
+              <span className="v3-overline">Net</span>
+              <strong className={`v3-past-stat-value ${netMinor >= 0 ? 'text-sage' : 'text-terracotta'}`}>
+                {netMinor >= 0 ? '+' : '−'}{money(Math.abs(netMinor))}
+              </strong>
+              <span className="v3-past-stat-meta">{group.activitiesCount} activities</span>
+            </div>
+          </section>
+        )}
+
+        <section className="panel v31-savings-history" aria-label={`${monthLabel} entries`}>
+          {group?.entries.length ? (
+            <div className="v31-history-entries-list">
+              {group.entries.map(entry => (
+                <SavingsEntryRow key={entry.id} entry={entry} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon={Wallet}
+              title="No savings activities"
+              description={`No deposits or withdrawals were recorded in ${monthLabel}.`}
+            />
+          )}
+
+          <div className="v3-past-footer-nav mt-6">
+            <button
+              type="button"
+              className="btn-outline flex items-center gap-2"
+              onClick={() => {
+                setSearchParams({ view: 'history' });
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            >
+              <ArrowLeft size={16} /> Back to Monthly Overview
+            </button>
+          </div>
+        </section>
+
+        {modalOverlay}
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // VIEW B: Past savings — monthly overview cards
+  // ═══════════════════════════════════════════════════════════════════════════
   if (viewAllHistory) {
+    // All-time stats (across all historical months)
+    const allHistDeposited = historicalGroups.reduce((s, g) => s + g.depositedMinor, 0);
+    const allHistWithdrawn = historicalGroups.reduce((s, g) => s + g.withdrawnMinor, 0);
+    const allHistNet = allHistDeposited - allHistWithdrawn;
+    const allHistCount = historicalGroups.reduce((s, g) => s + g.activitiesCount, 0);
+
     return (
       <div className="v3-page v31-savings v31-savings-all-history">
         <PageHeader
           eyebrow="SAVINGS ARCHIVE"
-          title="Savings History"
-          description="Complete chronological record of all deposits, withdrawals, and net savings movement."
+          title="Past Savings History"
+          description="Browse your savings activity month by month. Tap any month to see individual entries."
           action={
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 className="btn-outline flex items-center gap-2"
-                onClick={closeHistoryView}
+                onClick={() => {
+                  setSearchParams({});
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               >
                 <ArrowLeft size={16} /> Back to Savings
               </button>
@@ -462,331 +685,120 @@ export default function Savings({ isDedicatedHistoryView = false }) {
           }
         />
 
-        {/* Dedicated History Overview Metrics */}
-        <section className="v3-past-stats-strip panel">
+        {/* All-time overview strip */}
+        <section className="v3-past-stats-strip panel" aria-label="All-time savings summary">
           <div className="v3-past-stat">
-            <span className="v3-overline">Total deposited</span>
-            <strong className="v3-past-stat-value text-sage">+{money(historySummary.deposits)}</strong>
-            <span className="v3-past-stat-meta">Lifetime money added</span>
+            <span className="v3-overline">All-time deposited</span>
+            <strong className="v3-past-stat-value text-sage">+{money(allHistDeposited)}</strong>
+            <span className="v3-past-stat-meta">Past months only</span>
           </div>
           <div className="v3-past-stat-divider" aria-hidden="true" />
           <div className="v3-past-stat">
-            <span className="v3-overline">Total withdrawn</span>
-            <strong className="v3-past-stat-value text-terracotta">−{money(historySummary.withdrawals)}</strong>
-            <span className="v3-past-stat-meta">Money taken out</span>
+            <span className="v3-overline">All-time withdrawn</span>
+            <strong className="v3-past-stat-value text-terracotta">−{money(allHistWithdrawn)}</strong>
+            <span className="v3-past-stat-meta">Past months only</span>
           </div>
           <div className="v3-past-stat-divider" aria-hidden="true" />
           <div className="v3-past-stat">
             <span className="v3-overline">Net movement</span>
-            <strong className={`v3-past-stat-value ${historySummary.net >= 0 ? 'text-sage' : 'text-terracotta'}`}>
-              {historySummary.net >= 0 ? '+' : '−'}{money(Math.abs(historySummary.net))}
+            <strong className={`v3-past-stat-value ${allHistNet >= 0 ? 'text-sage' : 'text-terracotta'}`}>
+              {allHistNet >= 0 ? '+' : '−'}{money(Math.abs(allHistNet))}
             </strong>
-            <span className="v3-past-stat-meta">Across {historySummary.count} activities</span>
+            <span className="v3-past-stat-meta">Across {allHistCount} activities</span>
           </div>
         </section>
 
-        {/* Search & Filters Surface */}
-        <section className="v3-surface v3-filter-surface" aria-label="Filter savings activities">
-          <div className="v3-search-toolbar">
-            <label className="v3-search-field">
-              <Search size={18} aria-hidden="true" />
-              <span className="sr-only">Search savings history</span>
-              <input
-                type="search"
-                placeholder="Search savings by note or amount…"
-                value={historySearch}
-                onChange={e => setHistorySearch(e.target.value)}
-              />
-              {historySearch && (
-                <button
-                  type="button"
-                  className="icon-button !w-7 !h-7"
-                  onClick={() => setHistorySearch('')}
-                  aria-label="Clear search"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </label>
-            <button
-              className={`btn-outline v3-filter-button ${
-                historyFiltersOpen || hasActiveHistoryFilters ? 'v3-filter-active' : ''
-              }`}
-              onClick={() => setHistoryFiltersOpen(v => !v)}
-              aria-expanded={historyFiltersOpen}
-            >
-              <SlidersHorizontal size={17} /> Filters{' '}
-              {hasActiveHistoryFilters && <span className="v3-filter-indicator" />}
-            </button>
-          </div>
-
-          {historyFiltersOpen && (
-            <div className="v3-filter-grid">
-              <label>
-                <span className="v3-field-caption">Activity type</span>
-                <select
-                  className="field"
-                  value={historyType}
-                  onChange={e => setHistoryType(e.target.value)}
-                >
-                  <option value="all">All activities</option>
-                  <option value="deposit">Deposits only</option>
-                  <option value="withdrawal">Withdrawals only</option>
-                </select>
-              </label>
-
-              <label>
-                <span className="v3-field-caption">Month & Year</span>
-                <select
-                  className="field"
-                  value={historyMonth}
-                  onChange={e => setHistoryMonth(e.target.value)}
-                >
-                  <option value="">All months</option>
-                  {distinctSavingsMonths.map(m => (
-                    <option key={m} value={m}>
-                      {formatMonthYear(m)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {hasActiveHistoryFilters && (
-                <button
-                  type="button"
-                  className="v3-clear-filter col-span-full sm:col-auto"
-                  onClick={resetHistoryFilters}
-                >
-                  <X size={15} /> Reset filters
-                </button>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* Grouped Savings History List */}
-        <section className="panel v31-savings-history">
-          <div className="v31-section-heading">
-            <div>
-              <span className="v31-overline">HISTORICAL RECORDS</span>
-              <h2>
-                {filteredHistoryEntries.length}{' '}
-                {filteredHistoryEntries.length === 1 ? 'activity' : 'activities'} logged
-              </h2>
-            </div>
-            <Wallet size={19} className="text-sage" />
-          </div>
-
-          {filteredGroupedSavingsMonths.length === 0 ? (
+        <section className="v3-surface v3-record-surface" aria-label="Past savings months">
+          {historicalGroups.length === 0 ? (
             <EmptyState
               icon={Wallet}
-              title={data.entries.length ? 'No matching savings entries' : 'No savings activities yet'}
-              description={
-                data.entries.length
-                  ? 'Try broadening your search or resetting the selected filters.'
-                  : 'Add your first savings deposit to begin tracking your history.'
-              }
+              title="No past savings history"
+              description="All your savings activities are from the current month. Past months will appear here over time."
               action={
-                hasActiveHistoryFilters ? (
-                  <button className="btn-outline" onClick={resetHistoryFilters}>
-                    Clear filters
-                  </button>
-                ) : (
-                  <Button onClick={() => show('deposit')} disabled={!online}>
-                    <Plus size={16} /> Add savings
-                  </Button>
-                )
+                <button
+                  type="button"
+                  className="btn-outline flex items-center gap-2"
+                  onClick={() => {
+                    setSearchParams({});
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                >
+                  <ArrowLeft size={16} /> Back to Savings
+                </button>
               }
             />
           ) : (
-            filteredGroupedSavingsMonths.map(group => {
-              const netMinor = group.depositedMinor - group.withdrawnMinor;
-              return (
-                <div className="v31-history-group" key={group.key}>
-                  <div className="v31-history-group-header">
-                    <div className="v31-history-group-title-wrap">
-                      <span className="v31-history-bullet" aria-hidden="true" />
-                      <h3 className="v31-history-group-title">{group.title}</h3>
-                      <span className="v3-history-month-count">
-                        ({group.activitiesCount} {group.activitiesCount === 1 ? 'activity' : 'activities'})
-                      </span>
-                    </div>
-                    <div className="v31-history-month-totals">
-                      {group.depositedMinor > 0 && (
-                        <span className="v31-total-deposit text-sage">
-                          +{money(group.depositedMinor)}
-                        </span>
-                      )}
-                      {group.withdrawnMinor > 0 && (
-                        <span className="v31-total-withdrawal text-terracotta">
-                          −{money(group.withdrawnMinor)}
-                        </span>
-                      )}
-                      <span className="v31-total-net">
-                        Net:{' '}
-                        <strong>
-                          {netMinor >= 0 ? '+' : '−'}
-                          {money(Math.abs(netMinor))}
-                        </strong>
-                      </span>
-                    </div>
-                  </div>
+            <>
+              <div className="v3-past-overview-header">
+                <p className="v3-overline">PAST MONTHS</p>
+                <p className="v3-past-overview-meta">
+                  {historicalGroups.length} {historicalGroups.length === 1 ? 'month' : 'months'} of
+                  history
+                </p>
+              </div>
 
-                  <div className="v31-history-entries-list">
-                    {group.entries.map(entry => (
-                      <div className="v31-saving-entry" key={entry.id}>
-                        <span
-                          className={`v31-saving-entry-icon ${
-                            entry.type === 'deposit' ? 'is-deposit' : 'is-withdrawal'
-                          }`}
-                        >
-                          {entry.type === 'deposit' ? (
-                            <ArrowDownLeft size={18} />
-                          ) : (
-                            <ArrowUpRight size={18} />
+              <div className="v3-past-month-cards">
+                {historicalGroups.map(group => {
+                  const netMinor = group.depositedMinor - group.withdrawnMinor;
+                  return (
+                    <button
+                      key={group.key}
+                      type="button"
+                      className="v3-past-month-card"
+                      onClick={() => {
+                        setSearchParams({ view: 'history', month: group.key });
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      aria-label={`View savings for ${formatMonthYear(group.key)}`}
+                    >
+                      <div className="v3-pmc-left">
+                        <span className="v3-pmc-month">{monthTitle(group.key)}</span>
+                        <span className="v3-pmc-meta">
+                          {group.activitiesCount}{' '}
+                          {group.activitiesCount === 1 ? 'activity' : 'activities'}
+                          {group.depositedMinor > 0 && (
+                            <> · <span className="text-sage">+{money(group.depositedMinor)}</span></>
+                          )}
+                          {group.withdrawnMinor > 0 && (
+                            <> · <span className="text-terracotta">−{money(group.withdrawnMinor)}</span></>
                           )}
                         </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <strong className="truncate">
-                              {entry.note ||
-                                (entry.type === 'deposit' ? 'Savings added' : 'Savings withdrawn')}
-                            </strong>
-                            <span
-                              className={`v31-entry-type-tag ${
-                                entry.type === 'deposit' ? 'tag-deposit' : 'tag-withdrawal'
-                              }`}
-                            >
-                              {entry.type === 'deposit' ? 'Deposit' : 'Withdrawal'}
-                            </span>
-                          </div>
-                          <span className="text-xs text-muted">
-                            {new Date(`${entry.effectiveDate}T12:00:00Z`).toLocaleDateString(
-                              'en-IN',
-                              {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric',
-                                timeZone: 'UTC',
-                              }
-                            )}
-                          </span>
-                        </div>
-                        <strong
-                          className={`font-mono ${
-                            entry.type === 'deposit' ? 'text-sage' : 'text-terracotta'
-                          }`}
-                        >
-                          {entry.type === 'deposit' ? '+' : '−'}
-                          {money(entry.amountMinor)}
-                        </strong>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })
-          )}
+                      <div className="v3-pmc-right">
+                        <strong className={`v3-pmc-total ${netMinor >= 0 ? 'text-sage' : 'text-terracotta'}`}>
+                          {netMinor >= 0 ? '+' : '−'}{money(Math.abs(netMinor))}
+                        </strong>
+                        <ChevronRight size={16} className="v3-pmc-chevron" aria-hidden="true" />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
 
-          <div className="v3-past-footer-nav mt-6">
-            <button
-              type="button"
-              className="btn-outline flex items-center gap-2"
-              onClick={closeHistoryView}
-            >
-              <ArrowLeft size={16} /> Return to Savings
-            </button>
-          </div>
+              <div className="v3-past-footer-nav">
+                <button
+                  type="button"
+                  className="btn-outline flex items-center gap-2"
+                  onClick={() => {
+                    setSearchParams({});
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                >
+                  <ArrowLeft size={16} /> Return to Savings
+                </button>
+              </div>
+            </>
+          )}
         </section>
 
-        {/* Modal Overlays */}
-        <Overlay
-          title={
-            type === 'deposit'
-              ? 'Add savings'
-              : type === 'withdrawal'
-              ? 'Withdraw savings'
-              : type === 'goal'
-              ? 'New savings goal'
-              : type === 'edit-goal'
-              ? 'Edit savings goal'
-              : type === 'allocate'
-              ? 'Allocate savings'
-              : type === 'release'
-              ? 'Release allocation'
-              : 'Archive goal'
-          }
-          open={Boolean(dialog)}
-          onClose={close}
-          compact
-        >
-          <form onSubmit={run} className="v31-savings-form">
-            {['deposit', 'withdrawal'].includes(type) && (
-              <>
-                <label>
-                  Amount (₹)
-                  <input
-                    className="field"
-                    autoFocus
-                    inputMode="decimal"
-                    value={amount}
-                    onChange={e => setAmount(e.target.value)}
-                    placeholder="0.00"
-                    required
-                  />
-                </label>
-                <label>
-                  Date
-                  <input
-                    className="field"
-                    type="date"
-                    max={dateToday()}
-                    value={date}
-                    onChange={e => setDate(e.target.value)}
-                    required
-                  />
-                </label>
-                <label>
-                  Note (optional)
-                  <input
-                    className="field"
-                    value={note}
-                    maxLength={240}
-                    onChange={e => setNote(e.target.value)}
-                    placeholder="e.g. October savings"
-                  />
-                </label>
-                {type === 'withdrawal' && (
-                  <p className="text-xs text-muted">Available to withdraw: {money(free)}</p>
-                )}
-              </>
-            )}
-            {error && (
-              <p role="alert" className="v31-form-error">
-                {error}
-              </p>
-            )}
-            <div className="v31-form-actions">
-              <button type="button" className="btn-outline" onClick={close} disabled={busy}>
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary" disabled={busy || !online}>
-                {busy
-                  ? 'Saving…'
-                  : type === 'withdrawal'
-                  ? 'Record withdrawal'
-                  : 'Add savings'}
-              </button>
-            </div>
-          </form>
-        </Overlay>
+        {modalOverlay}
       </div>
     );
   }
 
-  // =========================================================================
-  // VIEW 2: DEDICATED SAVINGS GOALS VIEW (View More Goals)
-  // =========================================================================
+  // ═══════════════════════════════════════════════════════════════════════════
+  // VIEW D: DEDICATED SAVINGS GOALS VIEW (View More Goals)
+  // ═══════════════════════════════════════════════════════════════════════════
   if (viewAllGoals) {
     return (
       <div className="v3-page v31-savings-all-goals">
@@ -858,115 +870,16 @@ export default function Savings({ isDedicatedHistoryView = false }) {
           </div>
         )}
 
-        {/* Modal Overlays */}
-        <Overlay
-          title={
-            type === 'goal'
-              ? 'New savings goal'
-              : type === 'edit-goal'
-              ? 'Edit savings goal'
-              : type === 'allocate'
-              ? 'Allocate savings'
-              : type === 'release'
-              ? 'Release allocation'
-              : 'Archive goal'
-          }
-          open={Boolean(dialog)}
-          onClose={close}
-          compact
-        >
-          <form onSubmit={run} className="v31-savings-form">
-            {['goal', 'edit-goal'].includes(type) && (
-              <>
-                <label>
-                  Goal name
-                  <input
-                    className="field"
-                    autoFocus
-                    value={goalName}
-                    maxLength={70}
-                    onChange={e => setGoalName(e.target.value)}
-                    placeholder="e.g. Mountain vacation"
-                    required
-                  />
-                </label>
-                <label>
-                  Target amount (₹)
-                  <input
-                    className="field"
-                    value={goalTarget}
-                    inputMode="decimal"
-                    onChange={e => setGoalTarget(e.target.value)}
-                    placeholder="10000"
-                    required
-                  />
-                </label>
-                <label>
-                  Target date (optional)
-                  <input
-                    className="field"
-                    type="date"
-                    value={targetDate}
-                    onChange={e => setTargetDate(e.target.value)}
-                  />
-                </label>
-              </>
-            )}
-            {['allocate', 'release'].includes(type) && (
-              <>
-                <p className="text-sm text-muted">
-                  {type === 'allocate'
-                    ? `Available: ${money(free)}.`
-                    : `Allocated to ${editingGoal?.name}: ${money(editingGoal?.allocatedMinor || 0)}.`}
-                </p>
-                <label>
-                  Amount (₹)
-                  <input
-                    className="field"
-                    autoFocus
-                    inputMode="decimal"
-                    value={goalAmount}
-                    onChange={e => setGoalAmount(e.target.value)}
-                    required
-                  />
-                </label>
-              </>
-            )}
-            {type === 'archive' && (
-              <p className="text-sm text-muted">
-                Archive “{editingGoal?.name}”? Any allocated savings will become available again.
-                Your deposit history will stay intact.
-              </p>
-            )}
-            {error && (
-              <p role="alert" className="v31-form-error">
-                {error}
-              </p>
-            )}
-            <div className="v31-form-actions">
-              <button type="button" className="btn-outline" onClick={close} disabled={busy}>
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary" disabled={busy || !online}>
-                {busy
-                  ? 'Saving…'
-                  : type === 'archive'
-                  ? 'Archive goal'
-                  : 'Save'}
-              </button>
-            </div>
-          </form>
-        </Overlay>
+        {modalOverlay}
       </div>
     );
   }
 
-  // =========================================================================
-  // VIEW 3: MAIN SAVINGS PAGE VIEW
-  // =========================================================================
+  // ═══════════════════════════════════════════════════════════════════════════
+  // VIEW A: MAIN SAVINGS PAGE — current month history only
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  // For compact scannability, show recent 3 months in main view
-  const recentSavingsMonths = allGroupedSavingsMonths.slice(0, 3);
+  const currentMonthLabel = formatMonthYear(currentMonthKey);
 
   return (
     <div className="v3-page v31-savings">
@@ -1003,7 +916,7 @@ export default function Savings({ isDedicatedHistoryView = false }) {
       </section>
 
       <div className="v31-savings-columns">
-        {/* Savings Goals: Compact view with at most 3 cards and View More */}
+        {/* Savings Goals */}
         <section className="panel v31-savings-goals">
           <div className="v31-section-heading">
             <div>
@@ -1084,132 +997,77 @@ export default function Savings({ isDedicatedHistoryView = false }) {
         </section>
       </div>
 
-      {/* Monthly-wise Savings History Section */}
-      <section className="panel v31-savings-history">
+      {/* Current Month Savings History */}
+      <section className="panel v31-savings-history" aria-label="Current month savings history">
         <div className="v31-section-heading">
           <div>
-            <span className="v31-overline">Every little step counts</span>
-            <h2>Savings history</h2>
+            <span className="v31-overline">CURRENT MONTH</span>
+            <h2>
+              {currentMonthLabel} · Savings activity
+            </h2>
           </div>
-          <div className="flex items-center gap-2">
-            {data.entries.length > 0 && (
-              <button
-                type="button"
-                className="btn-outline text-xs !py-1.5 flex items-center gap-1.5"
-                onClick={openHistoryView}
-              >
-                <HistoryIcon size={14} /> View All History
-              </button>
-            )}
-            <Wallet size={19} className="text-sage" />
-          </div>
+          <Wallet size={19} className="text-sage" />
         </div>
 
-        {data.entries.length === 0 ? (
-          <p className="v31-savings-empty text-sm">No entries yet. Add savings to start your journey.</p>
+        {/* Current month stats strip */}
+        {currentMonthEntries.length > 0 && (
+          <div className="v3-savings-current-month-stats">
+            <div className="v3-scms-stat">
+              <span className="v3-overline">Deposited</span>
+              <strong className="text-sage">+{money(currentMonthDeposited)}</strong>
+            </div>
+            <div className="v3-scms-divider" aria-hidden="true" />
+            <div className="v3-scms-stat">
+              <span className="v3-overline">Withdrawn</span>
+              <strong className="text-terracotta">−{money(currentMonthWithdrawn)}</strong>
+            </div>
+            <div className="v3-scms-divider" aria-hidden="true" />
+            <div className="v3-scms-stat">
+              <span className="v3-overline">Net</span>
+              <strong className={currentMonthNet >= 0 ? 'text-sage' : 'text-terracotta'}>
+                {currentMonthNet >= 0 ? '+' : '−'}{money(Math.abs(currentMonthNet))}
+              </strong>
+            </div>
+          </div>
+        )}
+
+        {currentMonthEntries.length === 0 ? (
+          <div className="v31-savings-empty text-sm">
+            <Wallet size={22} className="text-muted" />
+            <p>No savings activity in {currentMonthLabel}.</p>
+            <Button onClick={() => show('deposit')} disabled={!online}>
+              <Plus size={15} /> Add savings
+            </Button>
+          </div>
         ) : (
-          <>
-            {recentSavingsMonths.map(group => {
-              const netMinor = group.depositedMinor - group.withdrawnMinor;
-              return (
-                <div className="v31-history-group" key={group.key}>
-                  <div className="v31-history-group-header">
-                    <div className="v31-history-group-title-wrap">
-                      <span className="v31-history-bullet" aria-hidden="true" />
-                      <h3 className="v31-history-group-title">{group.title}</h3>
-                      <span className="v3-history-month-count">
-                        ({group.activitiesCount} {group.activitiesCount === 1 ? 'activity' : 'activities'})
-                      </span>
-                    </div>
-                    <div className="v31-history-month-totals">
-                      {group.depositedMinor > 0 && (
-                        <span className="v31-total-deposit text-sage">
-                          +{money(group.depositedMinor)}
-                        </span>
-                      )}
-                      {group.withdrawnMinor > 0 && (
-                        <span className="v31-total-withdrawal text-terracotta">
-                          −{money(group.withdrawnMinor)}
-                        </span>
-                      )}
-                      <span className="v31-total-net">
-                        Net:{' '}
-                        <strong>
-                          {netMinor >= 0 ? '+' : '−'}
-                          {money(Math.abs(netMinor))}
-                        </strong>
-                      </span>
-                    </div>
-                  </div>
+          <div className="v31-history-entries-list">
+            {currentMonthEntries.map(entry => (
+              <SavingsEntryRow key={entry.id} entry={entry} />
+            ))}
+          </div>
+        )}
 
-                  <div className="v31-history-entries-list">
-                    {group.entries.map(entry => (
-                      <div className="v31-saving-entry" key={entry.id}>
-                        <span
-                          className={`v31-saving-entry-icon ${
-                            entry.type === 'deposit' ? 'is-deposit' : 'is-withdrawal'
-                          }`}
-                        >
-                          {entry.type === 'deposit' ? (
-                            <ArrowDownLeft size={18} />
-                          ) : (
-                            <ArrowUpRight size={18} />
-                          )}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <strong className="truncate">
-                              {entry.note ||
-                                (entry.type === 'deposit' ? 'Savings added' : 'Savings withdrawn')}
-                            </strong>
-                            <span
-                              className={`v31-entry-type-tag ${
-                                entry.type === 'deposit' ? 'tag-deposit' : 'tag-withdrawal'
-                              }`}
-                            >
-                              {entry.type === 'deposit' ? 'Deposit' : 'Withdrawal'}
-                            </span>
-                          </div>
-                          <span className="text-xs text-muted">
-                            {new Date(`${entry.effectiveDate}T12:00:00Z`).toLocaleDateString(
-                              'en-IN',
-                              {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric',
-                                timeZone: 'UTC',
-                              }
-                            )}
-                          </span>
-                        </div>
-                        <strong
-                          className={`font-mono ${
-                            entry.type === 'deposit' ? 'text-sage' : 'text-terracotta'
-                          }`}
-                        >
-                          {entry.type === 'deposit' ? '+' : '−'}
-                          {money(entry.amountMinor)}
-                        </strong>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-
-            {data.entries.length > 0 && (
-              <div className="v3-history-view-all-box mt-4">
-                <button
-                  type="button"
-                  className="btn-outline w-full flex items-center justify-center gap-2 py-3"
-                  onClick={openHistoryView}
-                >
-                  <HistoryIcon size={16} /> View All Savings History ({data.entries.length} activities){' '}
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            )}
-          </>
+        {/* View Past Savings History CTA */}
+        {data.entries.length > 0 && (
+          <div className="v3-past-transactions-banner mt-4">
+            <div className="v3-past-banner-copy">
+              <span className="v3-overline">SAVINGS ARCHIVE</span>
+              <h3>View past savings history</h3>
+              <p>
+                See all your deposits and withdrawals from previous months, organized by month.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn-primary v3-past-banner-btn"
+              onClick={() => {
+                setSearchParams({ view: 'history' });
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            >
+              <HistoryIcon size={17} /> View Past Savings History <ChevronRight size={15} />
+            </button>
+          </div>
         )}
       </section>
 
@@ -1219,153 +1077,7 @@ export default function Savings({ isDedicatedHistoryView = false }) {
         deposit or withdrawal; your history stays intact.
       </p>
 
-      {/* Dialog Overlay */}
-      <Overlay
-        title={
-          type === 'deposit'
-            ? 'Add savings'
-            : type === 'withdrawal'
-            ? 'Withdraw savings'
-            : type === 'goal'
-            ? 'New savings goal'
-            : type === 'edit-goal'
-            ? 'Edit savings goal'
-            : type === 'allocate'
-            ? 'Allocate savings'
-            : type === 'release'
-            ? 'Release allocation'
-            : 'Archive goal'
-        }
-        open={Boolean(dialog)}
-        onClose={close}
-        compact
-      >
-        <form onSubmit={run} className="v31-savings-form">
-          {['deposit', 'withdrawal'].includes(type) && (
-            <>
-              <label>
-                Amount (₹)
-                <input
-                  className="field"
-                  autoFocus
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={e => setAmount(e.target.value)}
-                  placeholder="0.00"
-                  required
-                />
-              </label>
-              <label>
-                Date
-                <input
-                  className="field"
-                  type="date"
-                  max={dateToday()}
-                  value={date}
-                  onChange={e => setDate(e.target.value)}
-                  required
-                />
-              </label>
-              <label>
-                Note (optional)
-                <input
-                  className="field"
-                  value={note}
-                  maxLength={240}
-                  onChange={e => setNote(e.target.value)}
-                  placeholder="e.g. October savings"
-                />
-              </label>
-              {type === 'withdrawal' && (
-                <p className="text-xs text-muted">Available to withdraw: {money(free)}</p>
-              )}
-            </>
-          )}
-          {['goal', 'edit-goal'].includes(type) && (
-            <>
-              <label>
-                Goal name
-                <input
-                  className="field"
-                  autoFocus
-                  value={goalName}
-                  maxLength={70}
-                  onChange={e => setGoalName(e.target.value)}
-                  placeholder="e.g. Mountain vacation"
-                  required
-                />
-              </label>
-              <label>
-                Target amount (₹)
-                <input
-                  className="field"
-                  value={goalTarget}
-                  inputMode="decimal"
-                  onChange={e => setGoalTarget(e.target.value)}
-                  placeholder="10000"
-                  required
-                />
-              </label>
-              <label>
-                Target date (optional)
-                <input
-                  className="field"
-                  type="date"
-                  value={targetDate}
-                  onChange={e => setTargetDate(e.target.value)}
-                />
-              </label>
-            </>
-          )}
-          {['allocate', 'release'].includes(type) && (
-            <>
-              <p className="text-sm text-muted">
-                {type === 'allocate'
-                  ? `Available: ${money(free)}.`
-                  : `Allocated to ${editingGoal?.name}: ${money(editingGoal?.allocatedMinor || 0)}.`}
-              </p>
-              <label>
-                Amount (₹)
-                <input
-                  className="field"
-                  autoFocus
-                  inputMode="decimal"
-                  value={goalAmount}
-                  onChange={e => setGoalAmount(e.target.value)}
-                  required
-                />
-              </label>
-            </>
-          )}
-          {type === 'archive' && (
-            <p className="text-sm text-muted">
-              Archive “{editingGoal?.name}”? Any allocated savings will become available again.
-              Your deposit history will stay intact.
-            </p>
-          )}
-          {error && (
-            <p role="alert" className="v31-form-error">
-              {error}
-            </p>
-          )}
-          <div className="v31-form-actions">
-            <button type="button" className="btn-outline" onClick={close} disabled={busy}>
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary" disabled={busy || !online}>
-              {busy
-                ? 'Saving…'
-                : type === 'archive'
-                ? 'Archive goal'
-                : type === 'withdrawal'
-                ? 'Record withdrawal'
-                : type === 'deposit'
-                ? 'Add savings'
-                : 'Save'}
-            </button>
-          </div>
-        </form>
-      </Overlay>
+      {modalOverlay}
     </div>
   );
 }

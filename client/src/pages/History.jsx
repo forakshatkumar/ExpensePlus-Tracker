@@ -1,20 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
-  Download,
-  Search,
-  SlidersHorizontal,
-  X,
-  ReceiptText,
-  Plus,
   ArrowLeft,
   ArrowRight,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
   History as HistoryIcon,
   PieChart,
-  Calendar,
-  Layers,
-  ChevronDown,
-  ChevronUp,
+  Plus,
+  ReceiptText,
+  TrendingDown,
 } from 'lucide-react';
 import { useAppData } from '../components/layout/AppLayout';
 import TransactionRow from '../components/TransactionRow';
@@ -23,23 +19,60 @@ import EmptyState from '../components/ui/EmptyState';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { api } from '../lib/api';
 import { useOnlineStatus } from '../components/pwa/PWAProvider';
-import { formatMonthYear, getCategoryEmoji, getCategoryName, inr } from '../lib/format';
+import {
+  dateToday,
+  formatMonthYear,
+  getCategoryEmoji,
+  getCategoryName,
+  inr,
+} from '../lib/format';
 
-const PAGE_SIZE = 40;
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-// Category breakdown component for monthly headers
-function MonthCategoryBreakdown({ transactions = [], categories = [] }) {
-  const monthTotalCents = transactions.reduce((acc, t) => acc + (t.amountCents || 0), 0);
-  if (!monthTotalCents) return null;
+function sortTxNewest(txs) {
+  return [...txs].sort(
+    (a, b) =>
+      (b.date || '').localeCompare(a.date || '') ||
+      (b.createdAt || '').localeCompare(a.createdAt || '')
+  );
+}
 
-  const categoryTotals = useMemo(() => {
+function groupByMonth(txs) {
+  const map = new Map();
+  for (const t of txs) {
+    const key = t.date?.length >= 7 ? t.date.slice(0, 7) : 'other';
+    if (!map.has(key)) {
+      map.set(key, { key, transactions: [], totalCents: 0 });
+    }
+    const g = map.get(key);
+    g.transactions.push(t);
+    g.totalCents += t.amountCents || 0;
+  }
+  // Sort months newest-first; 'other' always last
+  const sorted = Array.from(map.values()).sort((a, b) => {
+    if (a.key === 'other') return 1;
+    if (b.key === 'other') return -1;
+    return b.key.localeCompare(a.key);
+  });
+  for (const g of sorted) {
+    g.transactions = sortTxNewest(g.transactions);
+  }
+  return sorted;
+}
+
+// ─── Category Breakdown ───────────────────────────────────────────────────────
+
+function CategoryBreakdown({ transactions, categories }) {
+  const totalCents = transactions.reduce((s, t) => s + (t.amountCents || 0), 0);
+  if (!totalCents) return null;
+
+  const items = useMemo(() => {
     const map = new Map();
     for (const t of transactions) {
-      const catId = t.categoryId || 'other';
-      const existing = map.get(catId) || { id: catId, cents: 0, count: 0 };
-      existing.cents += (t.amountCents || 0);
-      existing.count += 1;
-      map.set(catId, existing);
+      const id = t.categoryId || 'other';
+      const cur = map.get(id) || { id, cents: 0 };
+      cur.cents += t.amountCents || 0;
+      map.set(id, cur);
     }
     return Array.from(map.values())
       .sort((a, b) => b.cents - a.cents)
@@ -47,14 +80,14 @@ function MonthCategoryBreakdown({ transactions = [], categories = [] }) {
         ...item,
         name: getCategoryName(item.id, categories),
         emoji: getCategoryEmoji(item.id, categories),
-        percent: Math.round((item.cents / monthTotalCents) * 100),
+        percent: Math.round((item.cents / totalCents) * 100),
       }));
-  }, [transactions, categories, monthTotalCents]);
+  }, [transactions, categories, totalCents]);
 
   return (
-    <div className="v3-month-breakdown-panel" aria-label="Category breakdown for this month">
+    <div className="v3-month-breakdown-panel" aria-label="Category breakdown">
       <div className="v3-month-breakdown-bar">
-        {categoryTotals.map(item => (
+        {items.map(item => (
           <span
             key={item.id}
             className="v3-month-breakdown-segment"
@@ -64,7 +97,7 @@ function MonthCategoryBreakdown({ transactions = [], categories = [] }) {
         ))}
       </div>
       <div className="v3-month-breakdown-chips">
-        {categoryTotals.map(item => (
+        {items.map(item => (
           <div key={item.id} className="v3-breakdown-chip">
             <span className="v3-breakdown-emoji">{item.emoji}</span>
             <span className="v3-breakdown-name">{item.name}</span>
@@ -77,188 +110,42 @@ function MonthCategoryBreakdown({ transactions = [], categories = [] }) {
   );
 }
 
-export default function History({ isDedicatedPastView = false }) {
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+export default function History() {
   const online = useOnlineStatus();
-  const location = useLocation();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Determine whether to display the dedicated past transactions view
-  const isPastView =
-    isDedicatedPastView ||
-    searchParams.get('view') === 'past' ||
-    searchParams.get('view') === 'all';
+  const { transactions, categories: categoryOptions, refreshAfterExpense, openExpense, notify } =
+    useAppData();
 
-  const {
-    transactions,
-    categories: categoryOptions,
-    refreshAfterExpense,
-    openExpense,
-    notify,
-  } = useAppData();
-
-  // Filters state
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState('all');
-  const [month, setMonth] = useState('');
-  const [txType, setTxType] = useState('all'); // 'all' | 'recurring' | 'regular'
-  const [sort, setSort] = useState('newest');
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [deleting, setDeleting] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
 
-  // Expanded category breakdown per month key
-  const [expandedBreakdowns, setExpandedBreakdowns] = useState({});
+  // Current month key e.g. "2026-11"
+  const currentMonthKey = dateToday().slice(0, 7);
 
-  const toggleBreakdown = key => {
-    setExpandedBreakdowns(prev => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  };
+  // View routing via search params
+  const view = searchParams.get('view'); // null | 'past'
+  const selectedMonth = searchParams.get('month'); // null | 'YYYY-MM'
 
-  useEffect(() => {
-    if (location.state?.focusSearch) {
-      document.getElementById('transaction-search')?.focus();
-    }
-  }, [location.state]);
-
-  const distinctCategories = useMemo(
-    () => [...new Set(transactions.map(t => t.categoryId))],
-    [transactions]
+  // ── Current-month transactions ──────────────────────────────────────────────
+  const currentMonthTxs = useMemo(
+    () => sortTxNewest(transactions.filter(t => t.date?.startsWith(currentMonthKey))),
+    [transactions, currentMonthKey]
   );
+  const currentMonthTotal = currentMonthTxs.reduce((s, t) => s + (t.amountCents || 0), 0);
 
-  // All distinct recorded months (YYYY-MM) in chronological order
-  const distinctMonths = useMemo(() => {
-    const set = new Set();
-    for (const t of transactions) {
-      if (t.date && t.date.length >= 7) {
-        set.add(t.date.slice(0, 7));
-      }
-    }
-    return Array.from(set).sort((a, b) => b.localeCompare(a));
-  }, [transactions]);
+  // ── Historical transactions (all months except current) ─────────────────────
+  const historicalGroups = useMemo(() => {
+    const hist = transactions.filter(
+      t => t.date && t.date.length >= 7 && t.date.slice(0, 7) !== currentMonthKey
+    );
+    return groupByMonth(hist);
+  }, [transactions, currentMonthKey]);
 
-  // Filter transactions
-  const filtered = useMemo(() => {
-    return transactions
-      .filter(t => {
-        // Category filter
-        if (category !== 'all' && t.categoryId !== category) return false;
-        // Month filter
-        if (month && !t.date?.startsWith(month)) return false;
-        // Transaction type filter
-        if (txType === 'recurring' && !t.isSubscription) return false;
-        if (txType === 'regular' && t.isSubscription) return false;
-        // Search query
-        if (query.trim()) {
-          const q = query.trim().toLowerCase();
-          const desc = (t.description || '').toLowerCase();
-          const note = (t.note || '').toLowerCase();
-          const catName = getCategoryName(t.categoryId, categoryOptions).toLowerCase();
-          if (!desc.includes(q) && !note.includes(q) && !catName.includes(q)) {
-            return false;
-          }
-        }
-        return true;
-      })
-      .sort((a, b) => {
-        if (sort === 'oldest') return (a.date || '').localeCompare(b.date || '');
-        if (sort === 'highest') return (b.amountCents || 0) - (a.amountCents || 0);
-        if (sort === 'lowest') return (a.amountCents || 0) - (b.amountCents || 0);
-        return (
-          (b.date || '').localeCompare(a.date || '') ||
-          (b.createdAt || '').localeCompare(a.createdAt || '')
-        );
-      });
-  }, [transactions, category, month, txType, query, sort, categoryOptions]);
-
-  const totalSpent = filtered.reduce((n, t) => n + (t.amountCents || 0), 0) / 100;
-
-  const resetFilters = () => {
-    setQuery('');
-    setCategory('all');
-    setMonth('');
-    setTxType('all');
-    setSort('newest');
-    setVisibleCount(PAGE_SIZE);
-  };
-
-  const activeFilters = Boolean(
-    month || category !== 'all' || txType !== 'all' || sort !== 'newest'
-  );
-
-  // Group filtered transactions monthly
-  const monthlyGroups = useMemo(() => {
-    const map = new Map();
-    for (const t of filtered) {
-      const dateStr = t.date || '';
-      const key = dateStr.length >= 7 ? dateStr.slice(0, 7) : 'other';
-      if (!map.has(key)) {
-        map.set(key, {
-          key,
-          title: key !== 'other' ? formatMonthYear(key) : 'Other dates',
-          transactions: [],
-          totalCents: 0,
-        });
-      }
-      const g = map.get(key);
-      g.transactions.push(t);
-      g.totalCents += t.amountCents || 0;
-    }
-
-    // Sort months descending chronological order, newest first
-    const sorted = Array.from(map.values()).sort((a, b) => {
-      if (a.key === 'other') return 1;
-      if (b.key === 'other') return -1;
-      return b.key.localeCompare(a.key);
-    });
-
-    // Sort transactions within each month
-    for (const g of sorted) {
-      g.transactions.sort((a, b) => {
-        if (sort === 'oldest') return (a.date || '').localeCompare(b.date || '');
-        if (sort === 'highest') return (b.amountCents || 0) - (a.amountCents || 0);
-        if (sort === 'lowest') return (a.amountCents || 0) - (b.amountCents || 0);
-        return (
-          (b.date || '').localeCompare(a.date || '') ||
-          (b.createdAt || '').localeCompare(a.createdAt || '')
-        );
-      });
-    }
-
-    return sorted;
-  }, [filtered, sort]);
-
-  // CSV export
-  function csv() {
-    const escape = x => {
-      const raw = String(x ?? '');
-      const safe = /^[\s]*[=+@-]/.test(raw) ? `'${raw}` : raw;
-      return `"${safe.replaceAll('"', '""')}"`;
-    };
-    const rows = [
-      ['Date', 'Description', 'Category', 'Amount (INR)', 'Note', 'Recurring'],
-      ...filtered.map(t => [
-        t.date,
-        t.description,
-        getCategoryName(t.categoryId, categoryOptions),
-        ((t.amountCents || 0) / 100).toFixed(2),
-        t.note || '',
-        t.isSubscription ? 'Yes' : 'No',
-      ]),
-    ];
-    const content = '\uFEFF' + rows.map(r => r.map(escape).join(',')).join('\r\n');
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `expenseplus-transactions-${isPastView ? 'past-history' : 'recent'}.csv`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
+  // ── Delete handler ──────────────────────────────────────────────────────────
   async function remove() {
     if (!deleting || !online) return;
     setBusy(true);
@@ -266,7 +153,7 @@ export default function History({ isDedicatedPastView = false }) {
       await api(`/api/transactions/${deleting.id}`, { method: 'DELETE' });
       await refreshAfterExpense();
       setDeleting(null);
-      notify('Expense deleted.');
+      notify('Expense deleted.', 'success');
     } catch (e) {
       notify(e.message, 'error');
     } finally {
@@ -274,321 +161,125 @@ export default function History({ isDedicatedPastView = false }) {
     }
   }
 
-  // Navigate to dedicated Past Transactions view
-  const openPastTransactions = () => {
-    setSearchParams({ view: 'past' });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  // Back to Main Transaction Logs view
-  const returnToMainLogs = () => {
+  // ── Navigation helpers ──────────────────────────────────────────────────────
+  const goToMainView = () => {
     setSearchParams({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+  const goToPastOverview = () => {
+    setSearchParams({ view: 'past' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const goToMonthDetail = monthKey => {
+    setSearchParams({ view: 'past', month: monthKey });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-  // =========================================================================
-  // VIEW 1: DEDICATED FULL-PAGE PAST TRANSACTIONS VIEW
-  // Accessible ONLY through the "View All Transactions" / "Past Transactions" button
-  // =========================================================================
-  if (isPastView) {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // VIEW C: Individual month detail
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (view === 'past' && selectedMonth) {
+    const group = historicalGroups.find(g => g.key === selectedMonth);
+    const monthLabel = formatMonthYear(selectedMonth);
+
     return (
-      <div className="v3-page v3-history v3-past-transactions-page">
+      <div className="v3-page v3-history">
         <PageHeader
-          eyebrow="FINANCIAL ARCHIVE"
-          title="Past Transactions"
-          description="Complete historical records across all months with detailed search and filters."
+          eyebrow="TRANSACTION HISTORY"
+          title={monthLabel}
+          description={`All expenses recorded in ${monthLabel}.`}
           action={
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="btn-outline flex items-center gap-2"
-                onClick={returnToMainLogs}
-              >
-                <ArrowLeft size={16} /> Back to Transactions
-              </button>
-              <button
-                className="btn-outline"
-                onClick={csv}
-                disabled={!filtered.length}
-              >
-                <Download size={16} /> Export CSV
-              </button>
-            </div>
+            <button
+              type="button"
+              className="btn-outline flex items-center gap-2"
+              onClick={goToPastOverview}
+            >
+              <ArrowLeft size={16} /> Back to Overview
+            </button>
           }
         />
 
-        {/* Overview Metric Bar */}
-        <section className="v3-past-stats-strip panel">
-          <div className="v3-past-stat">
-            <span className="v3-overline">Total filtered spending</span>
-            <strong className="v3-past-stat-value">{inr(totalSpent)}</strong>
-            <span className="v3-past-stat-meta">
-              Across {filtered.length} {filtered.length === 1 ? 'transaction' : 'transactions'}
-            </span>
-          </div>
-          <div className="v3-past-stat-divider" aria-hidden="true" />
-          <div className="v3-past-stat">
-            <span className="v3-overline">Months spanned</span>
-            <strong className="v3-past-stat-value">{monthlyGroups.length}</strong>
-            <span className="v3-past-stat-meta">
-              {monthlyGroups.length > 0
-                ? `${monthlyGroups[monthlyGroups.length - 1]?.title} – ${monthlyGroups[0]?.title}`
-                : 'No recorded months'}
-            </span>
-          </div>
-          <div className="v3-past-stat-divider" aria-hidden="true" />
-          <div className="v3-past-stat">
-            <span className="v3-overline">Recurring commitments</span>
-            <strong className="v3-past-stat-value">
-              {filtered.filter(t => t.isSubscription).length}
-            </strong>
-            <span className="v3-past-stat-meta">
-              {inr(
-                filtered
-                  .filter(t => t.isSubscription)
-                  .reduce((sum, t) => sum + (t.amountCents || 0), 0) / 100
-              )}{' '}
-              total
-            </span>
-          </div>
-        </section>
+        {/* Month summary strip */}
+        {group && (
+          <section className="v3-current-month-hero panel" aria-label={`${monthLabel} summary`}>
+            <div className="v3-cmh-stats">
+              <div className="v3-cmh-stat">
+                <span className="v3-overline">Total Spent</span>
+                <strong className="v3-cmh-total">{inr(group.totalCents / 100)}</strong>
+              </div>
+              <div className="v3-cmh-divider" aria-hidden="true" />
+              <div className="v3-cmh-stat">
+                <span className="v3-overline">Transactions</span>
+                <strong className="v3-cmh-count">{group.transactions.length}</strong>
+              </div>
+              <div className="v3-cmh-divider" aria-hidden="true" />
+              <div className="v3-cmh-stat">
+                <span className="v3-overline">Avg. per expense</span>
+                <strong className="v3-cmh-count">
+                  {group.transactions.length
+                    ? inr(group.totalCents / group.transactions.length / 100)
+                    : '—'}
+                </strong>
+              </div>
+            </div>
 
-        {/* Search & Filter Controls Surface */}
-        <section className="v3-surface v3-filter-surface" aria-label="Search and filter past transactions">
-          <div className="v3-search-toolbar">
-            <label className="v3-search-field">
-              <Search size={18} aria-hidden="true" />
-              <span className="sr-only">Search transactions by title or description</span>
-              <input
-                id="transaction-search"
-                type="search"
-                placeholder="Search past transactions by title, note, or category…"
-                value={query}
-                onChange={e => {
-                  setQuery(e.target.value);
-                  setVisibleCount(PAGE_SIZE);
-                }}
-              />
-              {query && (
-                <button
-                  type="button"
-                  className="icon-button !w-7 !h-7"
-                  onClick={() => setQuery('')}
-                  aria-label="Clear search"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </label>
+            {/* Category breakdown toggle */}
             <button
-              className={`btn-outline v3-filter-button ${
-                filtersOpen || activeFilters ? 'v3-filter-active' : ''
-              }`}
-              onClick={() => setFiltersOpen(v => !v)}
-              aria-expanded={filtersOpen}
-              aria-controls="transaction-filters"
+              type="button"
+              className="v3-month-breakdown-btn mt-3"
+              onClick={() => setBreakdownOpen(v => !v)}
+              aria-expanded={breakdownOpen}
             >
-              <SlidersHorizontal size={17} /> Filters{' '}
-              {activeFilters && <span className="v3-filter-indicator" />}
+              <PieChart size={13} />
+              <span>{breakdownOpen ? 'Hide breakdown' : 'Category breakdown'}</span>
+              {breakdownOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
             </button>
-          </div>
 
-          {filtersOpen && (
-            <div className="v3-filter-grid" id="transaction-filters">
-              <label>
-                <span className="v3-field-caption">Category</span>
-                <select
-                  className="field"
-                  value={category}
-                  onChange={e => {
-                    setCategory(e.target.value);
-                    setVisibleCount(PAGE_SIZE);
-                  }}
-                >
-                  <option value="all">All categories</option>
-                  {distinctCategories.map(id => (
-                    <option key={id} value={id}>
-                      {getCategoryName(id, categoryOptions)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            {breakdownOpen && (
+              <CategoryBreakdown
+                transactions={group.transactions}
+                categories={categoryOptions}
+              />
+            )}
+          </section>
+        )}
 
-              <label>
-                <span className="v3-field-caption">Month & Year</span>
-                <select
-                  className="field"
-                  value={month}
-                  onChange={e => {
-                    setMonth(e.target.value);
-                    setVisibleCount(PAGE_SIZE);
-                  }}
-                >
-                  <option value="">All months</option>
-                  {distinctMonths.map(m => (
-                    <option key={m} value={m}>
-                      {formatMonthYear(m)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                <span className="v3-field-caption">Transaction type</span>
-                <select
-                  className="field"
-                  value={txType}
-                  onChange={e => {
-                    setTxType(e.target.value);
-                    setVisibleCount(PAGE_SIZE);
-                  }}
-                >
-                  <option value="all">All transactions</option>
-                  <option value="regular">One-time expenses</option>
-                  <option value="recurring">Recurring / Subscriptions</option>
-                </select>
-              </label>
-
-              <label>
-                <span className="v3-field-caption">Sort order</span>
-                <select
-                  className="field"
-                  value={sort}
-                  onChange={e => {
-                    setSort(e.target.value);
-                    setVisibleCount(PAGE_SIZE);
-                  }}
-                >
-                  <option value="newest">Newest first</option>
-                  <option value="oldest">Oldest first</option>
-                  <option value="highest">Highest amount</option>
-                  <option value="lowest">Lowest amount</option>
-                </select>
-              </label>
-
-              {activeFilters && (
-                <button
-                  type="button"
-                  className="v3-clear-filter col-span-full sm:col-auto"
-                  onClick={resetFilters}
-                >
-                  <X size={15} /> Reset filters
-                </button>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* Historical Records Grouped Monthly */}
-        <section className="v3-surface v3-record-surface" aria-label="Transaction historical records">
-          <div className="v3-record-heading">
-            <div>
-              <p className="v3-overline">ALL-TIME ARCHIVE</p>
-              <h2 className="v3-section-title">
-                {filtered.length.toLocaleString('en-IN')}{' '}
-                {filtered.length === 1 ? 'transaction' : 'transactions'}
-              </h2>
-            </div>
-            <div className="v3-record-total">
-              <span>Selected total</span>
-              <strong>{inr(totalSpent)}</strong>
-            </div>
-          </div>
-
-          {monthlyGroups.length ? (
-            <div className="v3-history-groups">
-              {monthlyGroups.map(group => {
-                const isBreakdownOpen = expandedBreakdowns[group.key];
-                return (
-                  <div className="v3-history-month-group" key={group.key}>
-                    <div className="v3-history-month-header">
-                      <div className="v3-history-month-info">
-                        <span className="v3-history-month-bullet" aria-hidden="true" />
-                        <h3 className="v3-history-month-title">{group.title}</h3>
-                        <span className="v3-history-month-count">
-                          ({group.transactions.length}{' '}
-                          {group.transactions.length === 1 ? 'expense' : 'expenses'})
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          className="v3-month-breakdown-btn"
-                          onClick={() => toggleBreakdown(group.key)}
-                          aria-expanded={Boolean(isBreakdownOpen)}
-                          aria-label={`Toggle category breakdown for ${group.title}`}
-                        >
-                          <PieChart size={13} />
-                          <span>{isBreakdownOpen ? 'Hide' : 'Breakdown'}</span>
-                          {isBreakdownOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                        </button>
-                        <div className="v3-history-month-sum">
-                          <span className="v3-history-month-sum-label">Month Total</span>
-                          <strong>{inr(group.totalCents / 100)}</strong>
-                        </div>
-                      </div>
-                    </div>
-
-                    {isBreakdownOpen && (
-                      <MonthCategoryBreakdown
-                        transactions={group.transactions}
-                        categories={categoryOptions}
-                      />
-                    )}
-
-                    <div className="v3-transaction-list v3-history-list">
-                      {group.transactions.map(t => (
-                        <TransactionRow
-                          key={t.id}
-                          item={t}
-                          categories={categoryOptions}
-                          onEdit={online ? openExpense : null}
-                          onDelete={online ? setDeleting : null}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+        {/* Transaction list */}
+        <section className="v3-surface v3-record-surface" aria-label={`Transactions for ${monthLabel}`}>
+          {group?.transactions.length ? (
+            <div className="v3-transaction-list v3-history-list">
+              {group.transactions.map(t => (
+                <TransactionRow
+                  key={t.id}
+                  item={t}
+                  categories={categoryOptions}
+                  onEdit={online ? openExpense : null}
+                  onDelete={online ? setDeleting : null}
+                />
+              ))}
             </div>
           ) : (
             <EmptyState
               icon={ReceiptText}
-              title={transactions.length ? 'No matching transactions' : 'No records found'}
-              description={
-                transactions.length
-                  ? 'No historical expenses match your selected filters. Try broadening your search or resetting filters.'
-                  : 'Add your first expense to begin building your financial archive.'
-              }
-              action={
-                transactions.length ? (
-                  <button className="btn-outline" onClick={resetFilters}>
-                    <X size={15} /> Clear filters
-                  </button>
-                ) : (
-                  <button className="btn-primary" onClick={() => openExpense()}>
-                    <Plus size={16} /> Add expense
-                  </button>
-                )
-              }
+              title="No transactions found"
+              description={`No expenses were recorded in ${monthLabel}.`}
             />
           )}
 
-          {/* Footer navigation back button */}
           <div className="v3-past-footer-nav">
             <button
               type="button"
               className="btn-outline flex items-center gap-2"
-              onClick={returnToMainLogs}
+              onClick={goToPastOverview}
             >
-              <ArrowLeft size={16} /> Return to Transaction Logs
+              <ArrowLeft size={16} /> Back to Monthly Overview
             </button>
           </div>
         </section>
 
         {deleting && (
           <ConfirmDialog
-            message={`Delete “${deleting.description}”? This cannot be undone.`}
+            message={`Delete "${deleting.description}"? This cannot be undone.`}
             onCancel={() => setDeleting(null)}
             onConfirm={remove}
             busy={busy}
@@ -598,260 +289,237 @@ export default function History({ isDedicatedPastView = false }) {
     );
   }
 
-  // =========================================================================
-  // VIEW 2: MAIN TRANSACTION LOGS VIEW
-  // Compact, scannable monthly grouping with "View All Transactions" button
-  // =========================================================================
+  // ═══════════════════════════════════════════════════════════════════════════
+  // VIEW B: Past transactions — monthly overview cards
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (view === 'past') {
+    return (
+      <div className="v3-page v3-history">
+        <PageHeader
+          eyebrow="FINANCIAL ARCHIVE"
+          title="Past Transactions"
+          description="Browse your spending month by month. Tap any month to explore its transactions."
+          action={
+            <button
+              type="button"
+              className="btn-outline flex items-center gap-2"
+              onClick={goToMainView}
+            >
+              <ArrowLeft size={16} /> Back to Transactions
+            </button>
+          }
+        />
 
-  // In the main view, keep it compact and easy to scan:
-  // Display the recent 3 active months by default, or all if 3 or fewer
-  const recentMonthlyGroups = monthlyGroups.slice(0, 3);
-  const hasOlderMonths = monthlyGroups.length > 3;
+        <section className="v3-surface v3-record-surface" aria-label="Past months overview">
+          {historicalGroups.length === 0 ? (
+            <EmptyState
+              icon={ReceiptText}
+              title="No past transactions"
+              description="All your transactions are from the current month. Past months will appear here over time."
+              action={
+                <button
+                  type="button"
+                  className="btn-outline flex items-center gap-2"
+                  onClick={goToMainView}
+                >
+                  <ArrowLeft size={16} /> Back to Transactions
+                </button>
+              }
+            />
+          ) : (
+            <>
+              <div className="v3-past-overview-header">
+                <p className="v3-overline">ALL PAST MONTHS</p>
+                <p className="v3-past-overview-meta">
+                  {historicalGroups.length} {historicalGroups.length === 1 ? 'month' : 'months'} of
+                  history
+                </p>
+              </div>
+
+              <div className="v3-past-month-cards">
+                {historicalGroups.map(group => {
+                  // Find top category
+                  const catMap = new Map();
+                  for (const t of group.transactions) {
+                    const id = t.categoryId || 'other';
+                    catMap.set(id, (catMap.get(id) || 0) + (t.amountCents || 0));
+                  }
+                  const topCatId =
+                    catMap.size > 0
+                      ? [...catMap.entries()].sort((a, b) => b[1] - a[1])[0][0]
+                      : null;
+
+                  return (
+                    <button
+                      key={group.key}
+                      type="button"
+                      className="v3-past-month-card"
+                      onClick={() => goToMonthDetail(group.key)}
+                      aria-label={`View transactions for ${formatMonthYear(group.key)}`}
+                    >
+                      <div className="v3-pmc-left">
+                        <span className="v3-pmc-month">{formatMonthYear(group.key)}</span>
+                        <span className="v3-pmc-meta">
+                          {group.transactions.length}{' '}
+                          {group.transactions.length === 1 ? 'expense' : 'expenses'}
+                          {topCatId && (
+                            <>
+                              {' '}
+                              · {getCategoryEmoji(topCatId, categoryOptions)}{' '}
+                              {getCategoryName(topCatId, categoryOptions)}
+                            </>
+                          )}
+                        </span>
+                      </div>
+                      <div className="v3-pmc-right">
+                        <strong className="v3-pmc-total">{inr(group.totalCents / 100)}</strong>
+                        <ChevronRight size={16} className="v3-pmc-chevron" aria-hidden="true" />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="v3-past-footer-nav">
+                <button
+                  type="button"
+                  className="btn-outline flex items-center gap-2"
+                  onClick={goToMainView}
+                >
+                  <ArrowLeft size={16} /> Return to Transaction Logs
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // VIEW A: Main Transaction Logs — current month only
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  const currentMonthLabel = formatMonthYear(currentMonthKey);
 
   return (
     <div className="v3-page v3-history">
       <PageHeader
         eyebrow="YOUR RECORDS"
         title="Transaction Logs"
-        description="Expenses organized monthly, newest first."
-        action={
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn-primary flex items-center gap-2 font-bold"
-              onClick={openPastTransactions}
-              title="View complete historical records"
-            >
-              <HistoryIcon size={16} /> View All Transactions
-            </button>
-            <button className="btn-outline" onClick={csv} disabled={!filtered.length}>
-              <Download size={16} /> Export CSV
-            </button>
-          </div>
-        }
+        description={`Expenses for ${currentMonthLabel}, newest first.`}
       />
 
-      {/* Main View Quick Search & Filter Bar */}
-      <section className="v3-surface v3-filter-surface" aria-label="Search and filter transactions">
-        <div className="v3-search-toolbar">
-          <label className="v3-search-field">
-            <Search size={18} aria-hidden="true" />
-            <span className="sr-only">Search transactions</span>
-            <input
-              id="transaction-search"
-              type="search"
-              placeholder="Search transactions by title or description"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-            />
-            {query && (
-              <button
-                type="button"
-                className="icon-button !w-7 !h-7"
-                onClick={() => setQuery('')}
-                aria-label="Clear search"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </label>
-          <button
-            className={`btn-outline v3-filter-button ${
-              filtersOpen || activeFilters ? 'v3-filter-active' : ''
-            }`}
-            onClick={() => setFiltersOpen(v => !v)}
-            aria-expanded={filtersOpen}
-            aria-controls="transaction-filters"
-          >
-            <SlidersHorizontal size={17} /> Filters{' '}
-            {activeFilters && <span className="v3-filter-indicator" />}
-          </button>
+      {/* Current month hero card */}
+      <section className="v3-current-month-hero panel" aria-label={`${currentMonthLabel} summary`}>
+        <div className="v3-cmh-header">
+          <div>
+            <p className="v3-overline">CURRENT MONTH</p>
+            <h2 className="v3-cmh-month-title">{currentMonthLabel}</h2>
+          </div>
+          <TrendingDown size={22} className="v3-cmh-icon" aria-hidden="true" />
         </div>
 
-        {filtersOpen && (
-          <div className="v3-filter-grid" id="transaction-filters">
-            <label>
-              <span className="v3-field-caption">Category</span>
-              <select
-                className="field"
-                value={category}
-                onChange={e => setCategory(e.target.value)}
-              >
-                <option value="all">All categories</option>
-                {distinctCategories.map(id => (
-                  <option key={id} value={id}>
-                    {getCategoryName(id, categoryOptions)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span className="v3-field-caption">Month</span>
-              <select
-                className="field"
-                value={month}
-                onChange={e => setMonth(e.target.value)}
-              >
-                <option value="">All months</option>
-                {distinctMonths.map(m => (
-                  <option key={m} value={m}>
-                    {formatMonthYear(m)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span className="v3-field-caption">Transaction type</span>
-              <select
-                className="field"
-                value={txType}
-                onChange={e => setTxType(e.target.value)}
-              >
-                <option value="all">All types</option>
-                <option value="regular">One-time expenses</option>
-                <option value="recurring">Recurring / Subscriptions</option>
-              </select>
-            </label>
-            <label>
-              <span className="v3-field-caption">Sort by</span>
-              <select
-                className="field"
-                value={sort}
-                onChange={e => setSort(e.target.value)}
-              >
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-                <option value="highest">Highest amount</option>
-                <option value="lowest">Lowest amount</option>
-              </select>
-            </label>
-            <button type="button" className="v3-clear-filter" onClick={resetFilters}>
-              <X size={15} /> Reset filters
-            </button>
+        <div className="v3-cmh-stats">
+          <div className="v3-cmh-stat">
+            <span className="v3-overline">Total Spent</span>
+            <strong className="v3-cmh-total">{inr(currentMonthTotal / 100)}</strong>
           </div>
+          <div className="v3-cmh-divider" aria-hidden="true" />
+          <div className="v3-cmh-stat">
+            <span className="v3-overline">Transactions</span>
+            <strong className="v3-cmh-count">{currentMonthTxs.length}</strong>
+          </div>
+        </div>
+
+        {/* Category breakdown toggle */}
+        {currentMonthTxs.length > 0 && (
+          <>
+            <button
+              type="button"
+              className="v3-month-breakdown-btn mt-3"
+              onClick={() => setBreakdownOpen(v => !v)}
+              aria-expanded={breakdownOpen}
+            >
+              <PieChart size={13} />
+              <span>{breakdownOpen ? 'Hide breakdown' : 'Category breakdown'}</span>
+              {breakdownOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            </button>
+
+            {breakdownOpen && (
+              <CategoryBreakdown
+                transactions={currentMonthTxs}
+                categories={categoryOptions}
+              />
+            )}
+          </>
         )}
       </section>
 
-      {/* Main View Records Surface */}
-      <section className="v3-surface v3-record-surface" aria-label="Transaction records">
+      {/* Transaction list */}
+      <section className="v3-surface v3-record-surface" aria-label="Current month transactions">
         <div className="v3-record-heading">
           <div>
-            <p className="v3-overline">MONTHLY SPENDING LOG</p>
+            <p className="v3-overline">THIS MONTH'S EXPENSES</p>
             <h2 className="v3-section-title">
-              {filtered.length.toLocaleString('en-IN')}{' '}
-              {filtered.length === 1 ? 'transaction' : 'transactions'}
+              {currentMonthTxs.length.toLocaleString('en-IN')}{' '}
+              {currentMonthTxs.length === 1 ? 'transaction' : 'transactions'}
             </h2>
           </div>
           <div className="v3-record-total">
-            <span>Filtered spending</span>
-            <strong>{inr(totalSpent)}</strong>
+            <span>Month total</span>
+            <strong>{inr(currentMonthTotal / 100)}</strong>
           </div>
         </div>
 
-        {recentMonthlyGroups.length ? (
-          <div className="v3-history-groups">
-            {recentMonthlyGroups.map(group => {
-              const isBreakdownOpen = expandedBreakdowns[group.key];
-              return (
-                <div className="v3-history-month-group" key={group.key}>
-                  <div className="v3-history-month-header">
-                    <div className="v3-history-month-info">
-                      <span className="v3-history-month-bullet" aria-hidden="true" />
-                      <h3 className="v3-history-month-title">{group.title}</h3>
-                      <span className="v3-history-month-count">
-                        ({group.transactions.length}{' '}
-                        {group.transactions.length === 1 ? 'expense' : 'expenses'})
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        className="v3-month-breakdown-btn"
-                        onClick={() => toggleBreakdown(group.key)}
-                        aria-expanded={Boolean(isBreakdownOpen)}
-                        aria-label={`Toggle category breakdown for ${group.title}`}
-                      >
-                        <PieChart size={13} />
-                        <span>{isBreakdownOpen ? 'Hide' : 'Breakdown'}</span>
-                        {isBreakdownOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                      </button>
-                      <div className="v3-history-month-sum">
-                        <span className="v3-history-month-sum-label">Month Total</span>
-                        <strong>{inr(group.totalCents / 100)}</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  {isBreakdownOpen && (
-                    <MonthCategoryBreakdown
-                      transactions={group.transactions}
-                      categories={categoryOptions}
-                    />
-                  )}
-
-                  <div className="v3-transaction-list v3-history-list">
-                    {group.transactions.map(t => (
-                      <TransactionRow
-                        key={t.id}
-                        item={t}
-                        categories={categoryOptions}
-                        onEdit={online ? openExpense : null}
-                        onDelete={online ? setDeleting : null}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+        {currentMonthTxs.length > 0 ? (
+          <div className="v3-transaction-list v3-history-list">
+            {currentMonthTxs.map(t => (
+              <TransactionRow
+                key={t.id}
+                item={t}
+                categories={categoryOptions}
+                onEdit={online ? openExpense : null}
+                onDelete={online ? setDeleting : null}
+              />
+            ))}
           </div>
         ) : (
           <EmptyState
             icon={ReceiptText}
-            title={transactions.length ? 'No matching transactions' : 'Your history starts here'}
-            description={
-              transactions.length
-                ? 'Try changing your search or filters.'
-                : 'Add your first expense and it will show up here.'
-            }
+            title={`No expenses in ${currentMonthLabel}`}
+            description="You haven't recorded any expenses this month. Add one to start tracking."
             action={
-              transactions.length ? (
-                <button className="btn-outline" onClick={resetFilters}>
-                  Clear filters
-                </button>
-              ) : (
-                <button className="btn-primary" onClick={() => openExpense()}>
-                  <Plus size={16} /> Add expense
-                </button>
-              )
+              <button className="btn-primary flex items-center gap-2" onClick={() => openExpense()}>
+                <Plus size={16} /> Add expense
+              </button>
             }
           />
         )}
-
-        {/* View All / Past Transactions Callout Banner */}
-        {transactions.length > 0 && (
-          <div className="v3-past-transactions-banner">
-            <div className="v3-past-banner-copy">
-              <span className="v3-overline">DEEPER FINANCIAL ARCHIVE</span>
-              <h3>Need to view all historical transactions?</h3>
-              <p>
-                Browse your complete chronological financial records, search across all previous
-                months, and filter by category or recurring expenses.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="btn-primary v3-past-banner-btn"
-              onClick={openPastTransactions}
-            >
-              <HistoryIcon size={17} /> View Past Transactions <ArrowRight size={15} />
-            </button>
-          </div>
-        )}
       </section>
+
+      {/* View Past Transactions CTA */}
+      <div className="v3-past-transactions-banner">
+        <div className="v3-past-banner-copy">
+          <span className="v3-overline">FINANCIAL ARCHIVE</span>
+          <h3>View past months</h3>
+          <p>
+            Browse your complete expense history, organized by month. Tap any month to drill
+            down into individual transactions.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn-primary v3-past-banner-btn"
+          onClick={goToPastOverview}
+        >
+          <HistoryIcon size={17} /> View Past Transactions <ArrowRight size={15} />
+        </button>
+      </div>
 
       {deleting && (
         <ConfirmDialog
-          message={`Delete “${deleting.description}”? This cannot be undone.`}
+          message={`Delete "${deleting.description}"? This cannot be undone.`}
           onCancel={() => setDeleting(null)}
           onConfirm={remove}
           busy={busy}

@@ -1375,3 +1375,229 @@ button.v31-settings-row:hover {
     transition: none !important;
   }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SESSION 2 — Current-month hero, past-month cards, savings stats
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Current Month Hero Card ──────────────────────────────────────────────── */
+.v3-current-month-hero {
+  margin-bottom: 1rem;
+}
+
+.v3-cmh-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.v3-cmh-month-title {
+  font-family: var(--font-display, serif);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0.15rem 0 0;
+  line-height: 1.2;
+}
+
+.v3-cmh-icon {
+  color: var(--color-sage, #7a9e7e);
+  opacity: 0.7;
+  flex-shrink: 0;
+  margin-top: 0.25rem;
+}
+
+.v3-cmh-stats {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex-wrap: wrap;
+}
+
+.v3-cmh-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 1.25rem 0.5rem 0;
+  min-width: 120px;
+}
+
+.v3-cmh-stat:first-child {
+  padding-left: 0;
+}
+
+.v3-cmh-divider {
+  width: 1px;
+  background: var(--color-border, rgba(255,255,255,0.08));
+  margin: 0 1.25rem 0 0;
+  align-self: stretch;
+}
+
+.v3-cmh-total {
+  font-size: 1.55rem;
+  font-weight: 800;
+  font-family: var(--font-display, serif);
+  color: var(--color-text);
+  line-height: 1.1;
+}
+
+.v3-cmh-count {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.2;
+}
+
+/* ── Past Overview Header ─────────────────────────────────────────────────── */
+.v3-past-overview-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border, rgba(255,255,255,0.06));
+}
+
+.v3-past-overview-meta {
+  font-size: 0.78rem;
+  color: var(--color-muted, rgba(255,255,255,0.45));
+}
+
+/* ── Past Month Cards (Overview) ──────────────────────────────────────────── */
+.v3-past-month-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.v3-past-month-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  background: var(--color-surface-raised, rgba(255,255,255,0.04));
+  border: 1px solid var(--color-border, rgba(255,255,255,0.07));
+  border-radius: 0.75rem;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  color: inherit;
+}
+
+.v3-past-month-card:hover {
+  background: var(--color-surface-hover, rgba(255,255,255,0.07));
+  border-color: var(--color-sage-muted, rgba(122,158,126,0.25));
+  transform: translateY(-1px);
+}
+
+.v3-past-month-card:active {
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v3-past-month-card {
+    transition: none;
+  }
+}
+
+.v3-pmc-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.v3-pmc-month {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.2;
+}
+
+.v3-pmc-meta {
+  font-size: 0.78rem;
+  color: var(--color-muted, rgba(255,255,255,0.45));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.v3-pmc-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.v3-pmc-total {
+  font-size: 1rem;
+  font-weight: 800;
+  font-family: var(--font-mono, monospace);
+  color: var(--color-text);
+}
+
+.v3-pmc-chevron {
+  color: var(--color-muted, rgba(255,255,255,0.3));
+  transition: transform 0.15s ease;
+}
+
+.v3-past-month-card:hover .v3-pmc-chevron {
+  transform: translateX(2px);
+  color: var(--color-sage, #7a9e7e);
+}
+
+/* ── Current Month Savings Stats Strip ────────────────────────────────────── */
+.v3-savings-current-month-stats {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex-wrap: wrap;
+  padding: 0.75rem 0 0.5rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border, rgba(255,255,255,0.06));
+}
+
+.v3-scms-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.25rem 1.25rem 0.25rem 0;
+  min-width: 100px;
+}
+
+.v3-scms-stat:first-child {
+  padding-left: 0;
+}
+
+.v3-scms-stat strong {
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-family: var(--font-mono, monospace);
+  line-height: 1.2;
+}
+
+.v3-scms-divider {
+  width: 1px;
+  background: var(--color-border, rgba(255,255,255,0.08));
+  margin: 0 1.25rem 0 0;
+  align-self: stretch;
+}
+
+/* ── Ensure savings-history has correct spacing for current-month variant ── */
+.v31-savings-history .v31-savings-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem 0;
+  text-align: center;
+  color: var(--color-muted, rgba(255,255,255,0.45));
+}
