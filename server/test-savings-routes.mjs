@@ -47,3 +47,28 @@ test('goal allocation prevents withdrawal and never changes total saved',async()
  const withdrawal=await request('POST','/api/savings/entries',{type:'withdrawal',amountMinor:250000,effectiveDate:'2026-10-20',note:'',requestId:'44444444-2222-4333-8444-555555555555'});
  assert.equal(withdrawal.statusCode,409);
 });
+test('goal completion is persistent, idempotent, reversible, and does not change savings balances',async()=>{
+ const {request,storage}=firestoreStub();
+ await request('POST','/api/savings/entries',{
+   type:'deposit',amountMinor:500000,effectiveDate:'2026-10-20',note:'Seed balance',
+   requestId:'55555555-2222-4333-8444-555555555555'
+ });
+ await request('POST','/api/savings/goals',{name:'Goa Trip',targetMinor:250000,targetDate:null});
+ const goalPath='users/testuser/savingsGoals/generated_test_goal_id';
+ const balancePath='users/testuser/savingsMeta/balance';
+ const initialBalance={...storage.get(balancePath)};
+ const completed=await request('PUT','/api/savings/goals/:id/completion',{completed:true},{id:'generated_test_goal_id'});
+ assert.equal(completed.statusCode,200);
+ assert.equal(completed.body.completed,true);
+ assert.equal(storage.get(goalPath).completed,true);
+ assert.equal(storage.get(goalPath).completedAt.toDate().toISOString(),'2026-10-20T00:00:00.000Z');
+ const duplicate=await request('PUT','/api/savings/goals/:id/completion',{completed:true},{id:'generated_test_goal_id'});
+ assert.equal(duplicate.statusCode,200);
+ assert.equal(duplicate.body.alreadyUpdated,true);
+ assert.equal(storage.get(goalPath).completed,true);
+ const restored=await request('PUT','/api/savings/goals/:id/completion',{completed:false},{id:'generated_test_goal_id'});
+ assert.equal(restored.statusCode,200);
+ assert.equal(storage.get(goalPath).completed,false);
+ assert.equal(storage.get(goalPath).completedAt,null);
+ assert.deepEqual(storage.get(balancePath),initialBalance);
+});

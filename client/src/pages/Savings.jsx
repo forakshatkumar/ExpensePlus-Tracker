@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowUpRight,
   CalendarDays,
+  Check,
   ChevronRight,
   Coins,
   Edit3,
@@ -13,6 +14,7 @@ import {
   Plus,
   Target,
   Trash2,
+  Trophy,
   Wallet,
 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -25,6 +27,12 @@ import EmptyState from '../components/ui/EmptyState';
 
 const money = minor => inr((minor || 0) / 100);
 const monthTitle = key => formatMonthYear(key);
+const completedDateLabel = value => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+};
 const parseMoney = value =>
   /^\d+(?:\.\d{1,2})?$/.test(value.trim())
     ? Number(value.trim().split('.')[0]) * 100 +
@@ -46,72 +54,74 @@ function Button({ children, secondary = false, ...props }) {
   );
 }
 
-function GoalCard({ goal, free, online, onAllocate, onRelease, onEdit, onArchive }) {
+function GoalCard({
+  goal, free, online, onAllocate, onRelease, onEdit, onArchive, onToggleComplete,
+}) {
+  const isCompleted = Boolean(goal.completed);
   const progress = Math.min(100, Math.round(((goal.allocatedMinor || 0) / (goal.targetMinor || 1)) * 100));
   const remainingMinor = Math.max(0, (goal.targetMinor || 0) - (goal.allocatedMinor || 0));
+  const completedOn = completedDateLabel(goal.completedAt);
 
   return (
-    <article className="v31-goal-card" key={goal.id}>
+    <article className={`v31-goal-card ${isCompleted ? 'is-completed' : ''}`} key={goal.id}>
       <div className="v31-goal-head">
-        <span className="v31-goal-symbol">
-          <Target size={19} />
+        <span className={`v31-goal-symbol ${isCompleted ? 'is-completed' : ''}`}>
+          {isCompleted ? <Trophy size={19} /> : <Target size={19} />}
         </span>
         <div className="min-w-0 flex-1">
           <h3>{goal.name}</h3>
-          <p>
-            {money(goal.allocatedMinor)} of {money(goal.targetMinor)}
-          </p>
+          <p>{money(goal.allocatedMinor)} of {money(goal.targetMinor)}</p>
         </div>
-        <span className="v31-goal-percent">{progress}%</span>
+        {isCompleted ? (
+          <span className="v31-goal-completed-badge"><Check size={13} /> Completed</span>
+        ) : (
+          <span className="v31-goal-percent">{progress}%</span>
+        )}
       </div>
-      <div className="v31-progress">
-        <span style={{ width: `${progress}%` }} />
-      </div>
+      <div className="v31-progress"><span style={{ width: `${progress}%` }} /></div>
       <div className="v31-goal-meta-row">
-        <span className="v31-goal-remaining">
-          Remaining: <strong>{money(remainingMinor)}</strong>
-        </span>
+        <span className="v31-goal-remaining">Remaining: <strong>{money(remainingMinor)}</strong></span>
         {goal.targetDate && (
           <span className="v31-goal-date">
             <CalendarDays size={13} /> Target:{' '}
             {new Date(`${goal.targetDate}T12:00:00Z`).toLocaleDateString('en-IN', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-              timeZone: 'UTC',
+              day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
             })}
           </span>
         )}
       </div>
+      <div className={`v31-goal-completion ${isCompleted ? 'is-completed' : ''}`}>
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={isCompleted}
+          aria-label={isCompleted ? `Restore ${goal.name} to active goals` : `Mark ${goal.name} as achieved`}
+          className="v31-goal-completion-toggle"
+          onClick={() => onToggleComplete(goal, !isCompleted)}
+          disabled={!online}
+        >
+          <span className="v31-goal-check-box" aria-hidden="true">
+            {isCompleted && <Check size={14} strokeWidth={3} />}
+          </span>
+          <span>{isCompleted ? 'Goal achieved' : "I've achieved this goal"}</span>
+        </button>
+        {completedOn && <span className="v31-goal-completed-date">Completed {completedOn}</span>}
+      </div>
       <div className="v31-goal-actions">
-        <button
-          type="button"
-          onClick={() => onAllocate(goal)}
-          disabled={!online || !free}
-        >
-          <Plus size={15} /> Allocate
-        </button>
-        <button
-          type="button"
-          onClick={() => onRelease(goal)}
-          disabled={!online || !goal.allocatedMinor}
-        >
-          <Minus size={15} /> Release
-        </button>
-        <button
-          type="button"
-          onClick={() => onEdit(goal)}
-          aria-label={`Edit ${goal.name}`}
-          title="Edit goal"
-        >
+        {!isCompleted && (
+          <>
+            <button type="button" onClick={() => onAllocate(goal)} disabled={!online || !free}>
+              <Plus size={15} /> Allocate
+            </button>
+            <button type="button" onClick={() => onRelease(goal)} disabled={!online || !goal.allocatedMinor}>
+              <Minus size={15} /> Release
+            </button>
+          </>
+        )}
+        <button type="button" onClick={() => onEdit(goal)} aria-label={`Edit ${goal.name}`} title="Edit goal">
           <Edit3 size={15} />
         </button>
-        <button
-          type="button"
-          onClick={() => onArchive(goal)}
-          aria-label={`Archive ${goal.name}`}
-          title="Archive goal"
-        >
+        <button type="button" onClick={() => onArchive(goal)} aria-label={`Archive ${goal.name}`} title="Archive goal">
           <Trash2 size={15} />
         </button>
       </div>
@@ -170,6 +180,7 @@ export default function Savings({ isDedicatedHistoryView = false }) {
 
   // View states
   const [viewAllGoals, setViewAllGoals] = useState(false);
+  const [goalFilter, setGoalFilter] = useState('active');
 
   // Search-param driven savings history navigation
   const view = searchParams.get('view'); // null | 'history'
@@ -215,6 +226,14 @@ export default function Savings({ isDedicatedHistoryView = false }) {
   }, []);
 
   const free = Math.max(0, data.summary.balanceMinor - data.summary.allocatedMinor);
+  const completedGoalCount = useMemo(
+    () => data.goals.filter(goal => Boolean(goal.completed)).length,
+    [data.goals]
+  );
+  const activeGoals = useMemo(() => data.goals.filter(goal => !goal.completed), [data.goals]);
+  const filteredGoals = goalFilter === 'completed'
+    ? data.goals.filter(goal => Boolean(goal.completed))
+    : activeGoals;
 
   // Current month key
   const currentMonthKey = dateToday().slice(0, 7);
@@ -335,6 +354,10 @@ export default function Savings({ isDedicatedHistoryView = false }) {
       }
       route = `/api/savings/goals/${goal.id}/allocate`;
       payload = { direction: type, amountMinor, requestId: opRef.current };
+    } else if (type === 'complete-goal' || type === 'restore-goal') {
+      route = `/api/savings/goals/${goal.id}/completion`;
+      method = 'PUT';
+      payload = { completed: type === 'complete-goal' };
     } else if (type === 'archive') {
       route = `/api/savings/goals/${goal.id}`;
       method = 'DELETE';
@@ -362,6 +385,10 @@ export default function Savings({ isDedicatedHistoryView = false }) {
           ? 'Savings released from goal.'
           : type === 'archive'
           ? 'Savings goal archived.'
+          : type === 'complete-goal'
+          ? `Goal achieved! You completed ${goal.name}.`
+          : type === 'restore-goal'
+          ? `${goal.name} moved back to active goals.`
           : 'Savings goal updated.';
       notify(msg);
     } catch (e) {
@@ -390,6 +417,10 @@ export default function Savings({ isDedicatedHistoryView = false }) {
           ? 'Allocate savings'
           : type === 'release'
           ? 'Release allocation'
+          : type === 'complete-goal'
+          ? 'Mark goal as achieved'
+          : type === 'restore-goal'
+          ? 'Restore savings goal'
           : 'Archive goal'
       }
       open={Boolean(dialog)}
@@ -493,6 +524,20 @@ export default function Savings({ isDedicatedHistoryView = false }) {
             </label>
           </>
         )}
+        {type === 'complete-goal' && (
+          <div className="v31-goal-confirmation">
+            <span className="v31-goal-confirmation-icon"><Trophy size={22} /></span>
+            <p>Have you achieved <strong>{editingGoal?.name}</strong>? Confirming this will move it into your completed goals and update your achievement counter.</p>
+            <span className="text-xs text-muted">Your savings balance and activity history will not change.</span>
+          </div>
+        )}
+        {type === 'restore-goal' && (
+          <div className="v31-goal-confirmation">
+            <span className="v31-goal-confirmation-icon"><Target size={22} /></span>
+            <p>Move <strong>{editingGoal?.name}</strong> back to your active goals? Its completion date will be cleared and your achievement counter will decrease by one.</p>
+            <span className="text-xs text-muted">Your savings balance and activity history will not change.</span>
+          </div>
+        )}
         {type === 'archive' && (
           <p className="text-sm text-muted">
             Archive "{editingGoal?.name}"? Any allocated savings will become available again.
@@ -517,6 +562,10 @@ export default function Savings({ isDedicatedHistoryView = false }) {
               ? 'Record withdrawal'
               : type === 'deposit'
               ? 'Add savings'
+              : type === 'complete-goal'
+              ? 'Yes, mark achieved'
+              : type === 'restore-goal'
+              ? 'Restore goal'
               : 'Save'}
           </button>
         </div>
@@ -823,6 +872,18 @@ export default function Savings({ isDedicatedHistoryView = false }) {
         />
 
         <div className="v31-all-goals-hero panel mb-6">
+          <div className="v31-goal-achievement-summary">
+            <span className="v31-goal-achievement-icon"><Trophy size={21} /></span>
+            <div className="v31-goal-achievement-copy">
+              <span className="v31-overline">GOALS ACHIEVED</span>
+              <strong key={completedGoalCount} className="v31-goal-achievement-number">{completedGoalCount}</strong>
+              <p>{completedGoalCount === 1 ? 'financial goal completed so far' : 'financial goals completed so far'}</p>
+            </div>
+          </div>
+          <div className="v31-goal-filter" role="group" aria-label="Filter savings goals">
+            <button type="button" className={goalFilter === 'active' ? 'is-active' : ''} aria-pressed={goalFilter === 'active'} onClick={() => setGoalFilter('active')}>Active ({activeGoals.length})</button>
+            <button type="button" className={goalFilter === 'completed' ? 'is-active' : ''} aria-pressed={goalFilter === 'completed'} onClick={() => setGoalFilter('completed')}>Completed ({completedGoalCount})</button>
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <span className="v31-overline">Goals allocation</span>
@@ -853,9 +914,15 @@ export default function Savings({ isDedicatedHistoryView = false }) {
               Create your first goal
             </Button>
           </div>
+        ) : filteredGoals.length === 0 ? (
+          <div className="panel v31-savings-empty">
+            <Trophy size={28} />
+            <h3>{goalFilter === 'completed' ? 'No completed goals yet' : 'No active goals'}</h3>
+            <p>{goalFilter === 'completed' ? 'When you achieve a goal, it will be saved here.' : 'All your goals are completed. You can find them in the Completed filter.'}</p>
+          </div>
         ) : (
           <div className="v31-dedicated-goals-grid">
-            {data.goals.map(goal => (
+            {filteredGoals.map(goal => (
               <GoalCard
                 key={goal.id}
                 goal={goal}
@@ -865,6 +932,7 @@ export default function Savings({ isDedicatedHistoryView = false }) {
                 onRelease={g => show('release', g)}
                 onEdit={g => show('edit-goal', g)}
                 onArchive={g => show('archive', g)}
+                onToggleComplete={(g, completed) => show(completed ? 'complete-goal' : 'restore-goal', g)}
               />
             ))}
           </div>
@@ -934,16 +1002,57 @@ export default function Savings({ isDedicatedHistoryView = false }) {
             </button>
           </div>
 
+          <div className="v31-goal-achievement-summary">
+            <span className="v31-goal-achievement-icon"><Trophy size={21} /></span>
+            <div className="v31-goal-achievement-copy">
+              <span className="v31-overline">GOALS ACHIEVED</span>
+              <strong key={completedGoalCount} className="v31-goal-achievement-number">{completedGoalCount}</strong>
+              <p>{completedGoalCount === 1 ? 'financial goal completed so far' : 'financial goals completed so far'}</p>
+            </div>
+            <button
+              type="button"
+              className="v31-achievement-view-button"
+              onClick={() => setGoalFilter('completed')}
+              aria-label="View completed savings goals"
+            >
+              View achievements <ChevronRight size={15} />
+            </button>
+          </div>
+
+          {data.goals.length > 0 && (
+            <div className="v31-goal-filter" role="group" aria-label="Filter savings goals">
+              <button type="button" className={goalFilter === 'active' ? 'is-active' : ''} aria-pressed={goalFilter === 'active'} onClick={() => setGoalFilter('active')}>
+                Active ({activeGoals.length})
+              </button>
+              <button type="button" className={goalFilter === 'completed' ? 'is-active' : ''} aria-pressed={goalFilter === 'completed'} onClick={() => setGoalFilter('completed')}>
+                Completed ({completedGoalCount})
+              </button>
+            </div>
+          )}
+
           {data.goals.length === 0 ? (
             <div className="v31-savings-empty">
               <Target size={25} />
               <h3>Save for something special.</h3>
               <p>Create a goal for a trip, a gadget or anything that matters to you.</p>
-              <Button onClick={() => show('goal')}>Create your first goal</Button>
+              <Button onClick={() => show('goal')} disabled={!online}>Create your first goal</Button>
+            </div>
+          ) : filteredGoals.length === 0 ? (
+            <div className="v31-savings-empty v31-goal-filter-empty">
+              {goalFilter === 'completed' ? <Trophy size={25} /> : <Target size={25} />}
+              <h3>{goalFilter === 'completed' ? 'Your next achievement is waiting.' : 'All goals achieved!'}</h3>
+              <p>
+                {goalFilter === 'completed'
+                  ? 'When you complete a savings goal, it will be celebrated and saved here.'
+                  : 'You have no active goals right now. Create another goal whenever you are ready.'}
+              </p>
+              {goalFilter === 'active' && (
+                <Button onClick={() => show('goal')} disabled={!online}>Create a new goal</Button>
+              )}
             </div>
           ) : (
             <div className="v31-goals-list">
-              {data.goals.slice(0, 3).map(goal => (
+              {filteredGoals.slice(0, 3).map(goal => (
                 <GoalCard
                   key={goal.id}
                   goal={goal}
@@ -953,15 +1062,16 @@ export default function Savings({ isDedicatedHistoryView = false }) {
                   onRelease={g => show('release', g)}
                   onEdit={g => show('edit-goal', g)}
                   onArchive={g => show('archive', g)}
+                  onToggleComplete={(g, completed) => show(completed ? 'complete-goal' : 'restore-goal', g)}
                 />
               ))}
-              {data.goals.length > 3 && (
+              {filteredGoals.length > 3 && (
                 <button
                   type="button"
                   className="btn-outline v31-view-more-goals"
                   onClick={() => setViewAllGoals(true)}
                 >
-                  View More ({data.goals.length} Goals) <ChevronRight size={16} />
+                  View More ({filteredGoals.length} Goals) <ChevronRight size={16} />
                 </button>
               )}
             </div>

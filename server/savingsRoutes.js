@@ -4,7 +4,12 @@ const LIMIT = 100_000_000_000; // minor units; backend owns all validation
 const idOK = id => typeof id === 'string' && /^[a-zA-Z0-9_-]{8,100}$/.test(id);
 const validMinor = n => Number.isSafeInteger(n) && n > 0 && n <= LIMIT;
 const money = n => Number.isSafeInteger(n) && n >= 0 && n <= LIMIT;
-const serialize = snap => ({id:snap.id,...snap.data(),createdAt:snap.data().createdAt?.toDate?.()?.toISOString()||null});
+const serialize = snap => ({
+  id: snap.id,
+  ...snap.data(),
+  createdAt: snap.data().createdAt?.toDate?.()?.toISOString() || null,
+  completedAt: snap.data().completedAt?.toDate?.()?.toISOString() || null,
+});
 const summaryOf = data => ({balanceMinor:data?.balanceMinor||0,allocatedMinor:data?.allocatedMinor||0,currency:'INR'});
 const yearMonth = date => date.slice(0,7);
 function monthlyHistory(entries, today) {
@@ -78,7 +83,7 @@ export default function registerSavingsRoutes(app,{db,FieldValue,userRef,isDate,
     if(!validMinor(targetMinor))return bad(res,'Enter a valid goal target.');
     if(targetDate!==null&&!isDate(targetDate))return bad(res,'Choose a valid goal date.');
     const ref=goals(req).doc();
-    await ref.create({name:name.trim(),targetMinor,targetDate,allocatedMinor:0,archived:false,createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
+    await ref.create({name:name.trim(),targetMinor,targetDate,allocatedMinor:0,archived:false,completed:false,completedAt:null,createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
     res.status(201).json({id:ref.id});
   }catch(e){next(e);}});
   app.put('/api/savings/goals/:id',async(req,res,next)=>{try{
@@ -92,6 +97,27 @@ export default function registerSavingsRoutes(app,{db,FieldValue,userRef,isDate,
     if(outcome==='missing')return respondError(res,404,'Goal not found.');
     if(outcome==='below')return respondError(res,409,'Target cannot be lower than the savings already allocated to this goal.');
     res.json({ok:true});
+  }catch(e){next(e);}});
+  // Goal completion is an idempotent status update: it never moves money or changes allocations.
+  app.put('/api/savings/goals/:id/completion',async(req,res,next)=>{try{
+    if(!idOK(req.params.id))return bad(res,'Invalid goal ID.');
+    const {completed}=req.body||{};
+    if(typeof completed!=='boolean')return bad(res,'Choose whether the goal is completed.');
+    const ref=goals(req).doc(req.params.id);
+    const outcome=await db.runTransaction(async tx=>{
+      const snap=await tx.get(ref);
+      if(!snap.exists||snap.data().archived)return {missing:true};
+      const current=Boolean(snap.data().completed);
+      if(current===completed)return {completed:current,alreadyUpdated:true};
+      tx.update(ref,{
+        completed,
+        completedAt:completed?FieldValue.serverTimestamp():null,
+        updatedAt:FieldValue.serverTimestamp(),
+      });
+      return {completed,alreadyUpdated:false};
+    });
+    if(outcome.missing)return respondError(res,404,'Goal not found.');
+    res.json({ok:true,completed:outcome.completed,alreadyUpdated:outcome.alreadyUpdated});
   }catch(e){next(e);}});
   app.delete('/api/savings/goals/:id',async(req,res,next)=>{try{
     if(!idOK(req.params.id))return bad(res,'Invalid goal ID.');

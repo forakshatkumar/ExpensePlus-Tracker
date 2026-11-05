@@ -1,32 +1,40 @@
-# ExpensePlus 3.1
+# ExpensePlus — Savings Goal Achievement Patch
 
-**Track smarter. Spend wiser. Save for what matters.**
+This patch adds persistent goal completion, a completed-goals counter, an Active/Completed filter, confirmation before status changes, and subtle achievement animations.
 
-ExpensePlus is a modern personal-finance PWA built with React, Tailwind CSS, Express and Firebase. Track spending, manage budgets and build savings habits through a focused, mobile-friendly experience.
+## Files to replace
 
-[**Live application**](https://expense-plus-pi-gray.vercel.app)
+Extract this archive over the root of your existing ExpensePlus repository, preserving the folder structure. It contains these replacement files:
 
-### Highlights
+- `client/src/pages/Savings.jsx`
+- `client/src/styles/v31.css`
+- `server/savingsRoutes.js`
+- `server/test-savings-routes.mjs`
 
-- Google authentication with user-scoped financial records
-- Expense tracking, categories, filters and financial analytics
-- Monthly budgets, notifications and no-spend streaks
-- **Savings Hub:** cumulative deposits, withdrawals, monthly history and personal savings goals
-- Four themes with light/dark appearance settings
-- Responsive desktop, tablet and mobile experience, installable as a PWA
+## What changed
 
-### Development
+- Added an explicit “I've achieved this goal” checkbox-style control to each goal.
+- Added a confirmation modal before completing or restoring a goal.
+- Added a Goals Achieved counter and Active / Completed filters.
+- Completed goals remain in Firestore and can be restored to active status.
+- Completion date is stored as `completedAt` and displayed on completed goal cards.
+- Added a dedicated `PUT /api/savings/goals/:id/completion` endpoint.
+- Completion updates are transactional and idempotent; they do not change balances, deposits, withdrawals, or allocations.
+- Newly created goals are initialized with `completed: false` and `completedAt: null`.
+- Existing goals without these fields are treated as active by the frontend.
+- Added reduced-motion-aware checkmark and counter animations.
 
-```bash
-cd client && npm install && npm run dev
-# In a separate terminal:
-cd server && npm install && npm run dev
-```
+## Apply and run
 
-Set up your Firebase and API environment variables using the `.env.example` files. Keep credentials private.
+1. Back up your current project.
+2. Extract the patch into the project root and allow it to replace the four files listed above.
+3. Run the backend tests from the server folder:
 
-### Deployment and testing
+   ```bash
+   node --test test-savings-routes.mjs
+   ```
 
-ExpensePlus uses separate Vercel frontend and Express API projects. For this update, **deploy both projects**. See [V31-DEPLOY-GUIDE.md](V31-DEPLOY-GUIDE.md) and [release notes](V31-RELEASE-NOTES.md).
+4. Start the backend and frontend using your existing project scripts.
+5. Test completing a goal, refreshing the page, switching to Completed, restoring it, and checking that savings balances remain unchanged.
 
-Made by [Akshat Kumar](https://github.com/forakshatkumar). Publicly usable as a personal portfolio project.
+No Firebase collection migration or environment-variable change is required. The new fields are stored on the existing `savingsGoals` documents.
